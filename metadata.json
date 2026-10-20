@@ -1,0 +1,6 @@
+{
+  "name": "Trip Sheet, Fuel & Driver Payroll System",
+  "description": "Enterprise fleet operations, trip sheets, fuel management, advances reconciliation, mileage benchmarks, driver payroll, and TLCM Pro integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

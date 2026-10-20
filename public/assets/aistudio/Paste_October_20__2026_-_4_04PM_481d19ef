@@ -1,0 +1,1382 @@
+# Project: Trip Sheet, Fuel Management & Driver Payroll System
+
+Act as a senior product designer, UX architect, and full-stack engineer. Build a professional, production-oriented web application for a transport and fleet management company.
+
+The application must manage the complete operational and financial lifecycle of drivers, vehicles, trip sheets, fuel consumption, trip expenses, driver advances, fuel deductions, monthly payroll, and payslip generation.
+
+Do not build a generic CRUD dashboard. Build a cohesive fleet operations and financial management application with a clear workflow, realistic data, detailed tables, usable forms, dashboards, validation, and business-rule-driven calculations.
+
+First, establish the complete frontend structure and functional user interface. Organize the application so a real backend and PostgreSQL database can be integrated without rewriting the business logic.
+
+---
+
+# 1. PRODUCT OBJECTIVE
+
+The application must support this end-to-end workflow:
+
+1. Create and maintain driver profiles.
+2. Assign salary structures to drivers.
+3. Record advances issued to drivers.
+4. Record fuel top-ups for vehicles on a separate page.
+5. Create and manage individual trip sheets.
+6. Record trip start and end odometer readings or manually reported distance.
+7. Record fuel consumed by each trip and calculate trip mileage.
+8. Record multiple route segments within one trip.
+9. Record and approve trip expenses.
+10. Reconcile trip advances against approved trip expenses.
+11. Maintain outstanding driver advance balances.
+12. Calculate potential fuel deductions against configurable mileage benchmarks.
+13. Review and approve fuel deductions before payroll.
+14. Generate monthly payroll using applicable salary structures and approved financial adjustments.
+15. Generate individual driver payslips.
+
+The system must also integrate with the existing TLCM Pro Tyre Lifecycle Management System through its backend API.
+
+The Trip Sheet application will use a separate PostgreSQL database. It must not directly write to the TLCM Pro database.
+
+---
+
+# 2. VISUAL IDENTITY AND DESIGN SYSTEM
+
+Use a sophisticated emerald green, gray, and white design system.
+
+The application should look like a professional enterprise fleet-management product, not a template dashboard or a consumer application.
+
+## Color palette
+
+Use these colors as the primary design tokens:
+
+* Primary emerald: #047857
+* Deep emerald: #065F46
+* Dark emerald: #064E3B
+* Light emerald background: #ECFDF5
+* Emerald border: #A7F3D0
+* Main background: #F8FAFC
+* Card background: #FFFFFF
+* Primary text: #1F2937
+* Secondary text: #6B7280
+* Muted text: #9CA3AF
+* Default border: #E5E7EB
+* Subtle gray surface: #F3F4F6
+* Success: #15803D
+* Warning: #D97706
+* Danger: #DC2626
+* Information: #2563EB
+
+Emerald must be the primary brand color for navigation highlights, primary buttons, active states, progress indicators, selected tabs, important metrics, and key actions.
+
+White should be the primary surface color for cards, forms, modals, and tables.
+
+Gray should provide the background structure, secondary text, dividers, and neutral UI elements.
+
+Use red and amber only for errors, exceptions, warnings, and financial or operational states that genuinely require attention.
+
+Do not make the entire interface green. Use emerald strategically against white and light-gray surfaces.
+
+## Layout
+
+Create a responsive desktop-first enterprise dashboard.
+
+Use:
+
+* A persistent left sidebar.
+* A compact top header.
+* Breadcrumb navigation.
+* Page titles with clear descriptions.
+* Consistent card layouts.
+* Well-designed data tables.
+* Search, filtering, sorting, and pagination.
+* Clear primary and secondary actions.
+* Accessible form controls.
+* Confirmation dialogs for important actions.
+* Drawers or modals for quick operations.
+* Responsive layouts for smaller screens.
+
+The sidebar should be collapsible.
+
+Use a clean, modern sans-serif font such as Inter.
+
+Use subtle borders, restrained shadows, consistent spacing, and medium-radius corners.
+
+Avoid excessive gradients, oversized cards, excessive rounded pills, decorative illustrations, and unnecessary animations.
+
+Use Lucide icons consistently.
+
+The visual quality should resemble a mature enterprise SaaS product used daily by fleet operators, accountants, and administrators.
+
+---
+
+# 3. APPLICATION NAVIGATION
+
+Organize the sidebar into the following groups.
+
+## Overview
+
+* Dashboard
+
+## Operations
+
+* Drivers
+* Driver Salary Structures
+* Driver Advances
+* Vehicles
+* Fuel Top-Ups
+* Trip Sheets
+
+## Financial Management
+
+* Trip Expenses
+* Advance Settlements
+* Fuel Deductions
+* Mileage Benchmarks
+
+## Payroll
+
+* Payroll Dashboard
+* Monthly Payroll
+* Payslips
+
+## Integration
+
+* TLCM Pro Integration
+* Integration Logs
+
+## Administration
+
+* Users and Permissions
+* Audit Logs
+* System Settings
+
+Each navigation item must open its corresponding page.
+
+Highlight the active navigation item using a light emerald background, emerald icon, and emerald text.
+
+Do not display dead navigation links.
+
+---
+
+# 4. DASHBOARD
+
+Create an operational dashboard showing the current state of the fleet and driver finances.
+
+## Summary cards
+
+Display:
+
+* Total active drivers.
+* Total vehicles.
+* Trips completed this month.
+* Trips currently in progress.
+* Total distance covered this month.
+* Total fuel consumed this month.
+* Average fleet mileage.
+* Total trip expenses.
+* Outstanding driver advances.
+* Pending fuel deductions.
+* Current payroll status.
+
+Use realistic sample data.
+
+Each metric card should include:
+
+* A clear label.
+* A prominent value.
+* An appropriate icon.
+* A comparison or status indicator when meaningful.
+
+## Dashboard visualizations
+
+Include:
+
+* Daily distance covered.
+* Fuel consumption versus distance.
+* Mileage performance against benchmark.
+* Monthly trip expenses.
+* Driver trip performance.
+* Fuel deduction trends.
+* Outstanding advance balances.
+
+Use Recharts or an equivalent chart library.
+
+Use emerald as the primary chart color, with gray and restrained supporting colors.
+
+## Operational alerts
+
+Display actionable alerts such as:
+
+* Trips awaiting completion.
+* Trips with odometer discrepancies.
+* Expenses awaiting approval.
+* Outstanding advance settlements.
+* Fuel deductions awaiting approval.
+* Payroll pending review.
+* TLCM Pro integration failures.
+
+Each alert should navigate to the relevant record or page.
+
+---
+
+# 5. DRIVER MANAGEMENT
+
+Build a complete driver management module.
+
+## Driver list
+
+Create a searchable, sortable, filterable table with these columns:
+
+* Driver number.
+* Driver name.
+* Contact number.
+* Joining date.
+* Assigned salary structure.
+* Current vehicle.
+* Outstanding advance.
+* Employment status.
+* Actions.
+
+Actions:
+
+* View.
+* Edit.
+* View financial ledger.
+* View trips.
+* View payroll history.
+* Deactivate, subject to appropriate validation.
+
+## Create driver form
+
+Include:
+
+* Driver number.
+* Full name.
+* Phone number.
+* Email, if available.
+* Address.
+* Joining date.
+* Driving license number.
+* License expiry date.
+* Employment status.
+* Notes.
+
+Validate required fields and prevent duplicate driver numbers.
+
+After creation, provide actions to assign a salary structure and issue an advance.
+
+## Driver detail page
+
+Use tabs:
+
+* Profile.
+* Salary Structure.
+* Trips.
+* Advances.
+* Expenses.
+* Fuel Deductions.
+* Payroll History.
+* Audit History.
+
+Show a financial summary with outstanding advances, approved deductions, and recent trip activity.
+
+---
+
+# 6. DRIVER SALARY STRUCTURES
+
+Create a dedicated salary structure module.
+
+The company must be able to define reusable salary structures and assign them to individual drivers.
+
+## Salary structure configuration
+
+Support configurable salary components, including:
+
+* Basic salary.
+* House Rent Allowance.
+* Other allowances.
+* Bata or trip allowance, if applicable.
+* Additional earnings.
+* Applicable deductions.
+
+Each component should have:
+
+* Component name.
+* Component type: earning or deduction.
+* Calculation type: fixed amount or percentage, where supported.
+* Amount or percentage.
+* Applicability rules.
+* Effective date.
+* Active/inactive status.
+
+Do not hardcode salary formulas for every driver.
+
+## Driver assignment
+
+Allow the administrator to:
+
+* Select a driver.
+* Select a salary structure.
+* Set the effective-from date.
+* View existing assignments.
+* Schedule a future salary structure change.
+
+Historical salary assignments must remain available for historical payroll calculations.
+
+When salary structures change, previously finalized payroll must not change.
+
+---
+
+# 7. DRIVER ADVANCE MANAGEMENT
+
+Create a dedicated page to issue and track advances.
+
+Every advance must be stored as an independent transaction.
+
+## Advance creation form
+
+Fields:
+
+* Driver.
+* Vehicle, if applicable.
+* Related trip, if applicable.
+* Advance date.
+* Advance amount.
+* Advance type.
+* Payment method.
+* Reference number.
+* Notes.
+
+Support advances before a trip is created and additional advances against an existing trip.
+
+## Advance types
+
+Provide configurable examples:
+
+* Trip advance.
+* Operational advance.
+* Other approved advance.
+
+## Advance ledger
+
+Display:
+
+* Transaction date.
+* Driver.
+* Trip number.
+* Advance amount.
+* Approved expenses allocated to settlement.
+* Amount returned.
+* Amount recovered through payroll.
+* Outstanding balance.
+* Status.
+
+Do not treat every advance as an automatic salary deduction.
+
+The outstanding advance must remain visible until it is returned, recovered through an authorized process, or otherwise resolved.
+
+---
+
+# 8. VEHICLE MANAGEMENT
+
+Vehicles are primarily managed in TLCM Pro.
+
+Build a vehicle reference page that displays vehicle information obtained from the TLCM Pro backend API.
+
+Vehicle fields may include:
+
+* Vehicle ID from TLCM Pro.
+* Registration number.
+* Vehicle type.
+* Status.
+* Current assignment, if available.
+* Latest odometer information, if available.
+* Total recorded trip distance.
+* Recent trip activity.
+
+The TLCM Pro vehicle ID is the authoritative identifier.
+
+The Trip Sheet application may cache selected vehicle details for display, but must not create conflicting vehicle identities.
+
+Provide clear integration states:
+
+* Connected.
+* Last synchronized.
+* Synchronization pending.
+* Synchronization failed.
+
+For frontend development without a connected backend, use clearly identified mock vehicle data behind a service abstraction.
+
+---
+
+# 9. VEHICLE FUEL TOP-UPS
+
+Create a dedicated page separate from trip management.
+
+This page records fuel purchased or added to a vehicle.
+
+## Fuel top-up form
+
+Fields:
+
+* Vehicle.
+* Date and time.
+* Fuel quantity in litres.
+* Price per litre.
+* Automatically calculated total cost.
+* Fuel station.
+* Odometer reading, when available.
+* Payment method.
+* Receipt or invoice reference.
+* Notes.
+
+Formula:
+
+Total Fuel Cost = Litres Purchased × Price per Litre
+
+Example:
+
+100 litres × ₹95 = ₹9,500.
+
+## Fuel top-up list
+
+Columns:
+
+* Date and time.
+* Vehicle registration number.
+* Quantity.
+* Price per litre.
+* Total cost.
+* Odometer reading.
+* Fuel station.
+* Recorded by.
+* Actions.
+
+Provide date-range and vehicle filters.
+
+Show summary cards for:
+
+* Total litres purchased.
+* Total fuel expenditure.
+* Average price per litre.
+* Number of top-ups.
+
+IMPORTANT: Fuel purchased for a vehicle is not automatically fuel consumed by an individual trip.
+
+Keep fuel top-ups and trip fuel consumption as separate concepts and separate records.
+
+---
+
+# 10. TRIP SHEET MANAGEMENT
+
+This is the central module of the application.
+
+Create a dedicated trip list, trip creation workflow, trip detail page, and trip completion workflow.
+
+The interface must make it easy to record a trip while preserving accurate odometer, fuel, expense, and financial information.
+
+## Trip list page
+
+Columns:
+
+* Trip number.
+* Trip date.
+* Driver.
+* Vehicle.
+* Starting location.
+* Final destination.
+* Starting odometer.
+* Ending odometer.
+* Trip distance.
+* Fuel consumed.
+* Calculated mileage.
+* Trip status.
+* Odometer validation status.
+* Actions.
+
+Filters:
+
+* Date range.
+* Driver.
+* Vehicle.
+* Trip status.
+* Odometer status.
+* Expense approval status.
+* Fuel deduction status.
+
+Provide a prominent "Create Trip" button.
+
+## Trip creation workflow
+
+Use a structured multi-section form or a stepper with clear progress.
+
+Recommended sections:
+
+1. Trip Details.
+2. Odometer and Distance.
+3. Route Segments.
+4. Fuel Consumption.
+5. Trip Expenses.
+6. Advance Settlement.
+7. Fuel Deduction.
+8. Review and Complete.
+
+Users must be able to save a trip as a draft and resume it later.
+
+Do not require every section to be complete before saving a draft.
+
+### Section A: Trip details
+
+Fields:
+
+* Trip number, generated by the system.
+* Driver.
+* Vehicle.
+* Trip start date and time.
+* Trip end date and time, entered when completing the trip.
+* Trip purpose or reference.
+* Notes.
+
+A trip should normally have one primary vehicle and one primary driver.
+
+Record driver and vehicle assignment history so that later changes do not rewrite historical trip attribution.
+
+### Section B: Odometer and distance
+
+At trip start, capture:
+
+* Starting odometer reading.
+* Reading timestamp.
+* Reading source.
+* Validation status.
+
+At trip completion, capture:
+
+* Ending odometer reading.
+* Reading timestamp.
+* Reading source.
+
+The user must also be able to enter the reported trip distance when one or both odometer readings are unavailable.
+
+Support these cases:
+
+CASE 1: Both readings available.
+
+Starting odometer: 125,000 km.
+Ending odometer: 125,450 km.
+Calculated distance: 450 km.
+
+CASE 2: Starting reading available, ending reading unavailable.
+
+Starting odometer: 125,000 km.
+Reported distance: 450 km.
+Provisional derived ending reading: 125,450 km.
+
+Mark the derived reading as derived, not measured.
+
+CASE 3: Odometer readings unavailable.
+
+Reported distance: 450 km.
+Absolute odometer readings: unavailable.
+
+The trip can still be used for operational reporting, but the system must not fabricate absolute readings.
+
+CASE 4: Odometer sequence is inconsistent.
+
+Flag the discrepancy and require review.
+
+Do not silently rewrite readings or clamp values to make them appear valid.
+
+Keep the following concepts separate:
+
+* Measured distance.
+* Reported distance.
+* Derived distance.
+* Validated distance.
+* Distance eligible for tyre attribution.
+
+A trip distance may be accepted for driver and trip analytics while tyre-distance attribution remains on hold until odometer validation is complete.
+
+### Section C: Repeatable route segments
+
+Within a single trip, allow the user to add any number of route segments.
+
+Each segment contains:
+
+* Sequence number.
+* From location.
+* To location.
+* Departure time, if available.
+* Arrival time, if available.
+* Segment distance, if known.
+* Notes.
+
+Example:
+
+1. Chennai → Vellore.
+2. Vellore → Bengaluru.
+3. Bengaluru → Hosur.
+4. Hosur → Chennai.
+
+Provide an "Add Route Segment" button.
+
+Allow users to edit, reorder where appropriate, and remove segments before finalization.
+
+Do not limit a trip to one From-to pair.
+
+Avoid double-counting distance when both trip-level distance and route-segment distances are available.
+
+### Section D: Trip fuel consumption
+
+Provide fields for:
+
+* Fuel consumed during the trip, in litres.
+* Fuel measurement method.
+* Fuel calculation status.
+* Opening fuel quantity, when known.
+* Fuel added during the trip, when known.
+* Closing fuel quantity, when known.
+* Notes.
+
+When reliable fuel-balance information is available:
+
+Fuel Consumed = Opening Fuel + Fuel Added − Closing Fuel
+
+When the user enters fuel consumption manually, preserve the manually reported value.
+
+If calculated consumption and manually reported consumption differ, flag the discrepancy for review.
+
+Calculate:
+
+Trip Mileage = Accepted Trip Distance ÷ Accepted Fuel Consumed
+
+Display mileage in km/litre.
+
+If distance or fuel consumption is missing or invalid, show "Unavailable" or "Pending verification" rather than displaying a misleading result.
+
+### Section E: Trip expenses
+
+Allow multiple expenses within a trip.
+
+Expense fields:
+
+* Expense category.
+* Description.
+* Amount.
+* Expense date.
+* Payment method.
+* Receipt or attachment.
+* Submitted by.
+* Approval status.
+* Approved amount.
+* Reviewer.
+* Review notes.
+
+Example categories:
+
+* Refreshments.
+* RTO charges.
+* Tolls.
+* Parking.
+* Loading and unloading.
+* Repairs.
+* Other operational expenses.
+
+Provide an "Add Expense" button.
+
+Display:
+
+* Total submitted expenses.
+* Total approved expenses.
+* Total rejected expenses.
+* Expenses awaiting approval.
+
+Only approved expenses should be used in advance settlement.
+
+Do not silently approve every entered expense.
+
+### Section F: Advance settlement
+
+Display advances associated with the trip.
+
+Support multiple advances against the same trip.
+
+Calculate:
+
+Outstanding Settlement Balance =
+Total Advances Issued
+− Total Approved Expenses
+− Amount Returned
+− Other Valid Settlement Credits, if configured.
+
+For example:
+
+Advance issued: ₹10,000.
+Approved expenses: ₹1,600.
+Amount returned: ₹0.
+Outstanding balance: ₹8,400.
+
+Show the calculation clearly.
+
+Provide actions to:
+
+* Record an advance.
+* Allocate an advance to the trip.
+* Record money returned by the driver.
+* View settlement history.
+* Submit settlement for review.
+* Approve or reject settlement.
+
+Do not automatically treat an outstanding balance as a payroll deduction.
+
+If the company authorizes recovery through payroll, create a separate approved recovery record.
+
+### Section G: Fuel deduction
+
+Include a dedicated fuel analysis and deduction section on the trip detail page.
+
+Display:
+
+* Accepted distance.
+* Accepted fuel consumption.
+* Actual mileage.
+* Applicable mileage benchmark.
+* Applicable tolerance.
+* Expected fuel consumption.
+* Allowed fuel consumption.
+* Excess fuel consumption.
+* Applicable fuel price.
+* Potential deduction.
+* Calculation status.
+* Review status.
+
+Use the configured mileage benchmark applicable to the vehicle and trip conditions.
+
+Formula:
+
+Expected Fuel = Accepted Distance ÷ Benchmark Mileage
+
+If tolerance is expressed as a permitted excess percentage:
+
+Allowed Fuel = Expected Fuel × (1 + Tolerance Percentage)
+
+Excess Fuel = MAX(0, Accepted Fuel − Allowed Fuel)
+
+Potential Deduction = Excess Fuel × Applicable Fuel Price
+
+Example:
+
+Distance: 450 km.
+Benchmark: 6 km/litre.
+Tolerance: 5%.
+Accepted fuel consumption: 90 litres.
+Fuel price: ₹95/litre.
+
+Expected fuel: 75 litres.
+Allowed fuel: 78.75 litres.
+Excess fuel: 11.25 litres.
+Potential deduction: ₹1,068.75.
+
+The example values are illustrative.
+
+The interface must distinguish between:
+
+* Calculated estimate.
+* Pending review.
+* Approved deduction.
+* Rejected deduction.
+* Adjusted deduction.
+* Posted to payroll.
+* Recovered through payroll.
+
+Allow an authorized reviewer to adjust a proposed deduction with a mandatory reason.
+
+Never automatically post an unapproved fuel deduction to payroll.
+
+Preserve the original calculation and adjustment history.
+
+### Section H: Trip completion
+
+Provide a review summary before the user completes a trip.
+
+Display:
+
+* Driver and vehicle.
+* Trip dates.
+* Route segments.
+* Odometer readings.
+* Accepted distance.
+* Fuel consumption and mileage.
+* Expenses and approval status.
+* Advances and settlement balance.
+* Fuel deduction status.
+* TLCM Pro integration status.
+
+Allow trip completion even if some financial or odometer tasks remain unresolved, provided the business rules allow it.
+
+Represent operational completion, financial settlement, odometer validation, and tyre-distance attribution using separate statuses.
+
+Do not treat "Trip Completed" as equivalent to "Financially Settled."
+
+---
+
+# 11. MILEAGE BENCHMARK MANAGEMENT
+
+Create a dedicated benchmark configuration page.
+
+The mileage benchmark may vary by:
+
+* Vehicle.
+* Vehicle type.
+* Tonnage.
+* Effective date.
+* Other configurable operating conditions.
+
+Allow administrators to define benchmark rules without hardcoding a single value for every vehicle.
+
+Benchmark fields:
+
+* Benchmark name.
+* Vehicle or vehicle type.
+* Minimum and maximum tonnage, when applicable.
+* Expected mileage in km/litre.
+* Permitted tolerance.
+* Effective-from date.
+* Effective-to date.
+* Status.
+* Notes.
+
+If multiple rules match, use an explicit and deterministic priority system.
+
+Preserve the benchmark used for each historical trip calculation.
+
+Changing a benchmark must not silently rewrite previously approved deductions or finalized payroll.
+
+---
+
+# 12. DRIVER ADVANCE SETTLEMENT PAGE
+
+Create a dedicated financial settlement page.
+
+Show all trip advances and their current settlement status.
+
+Summary cards:
+
+* Total advances issued.
+* Total approved expenses.
+* Total money returned.
+* Outstanding advance balances.
+* Amounts awaiting review.
+* Authorized payroll recoveries.
+
+Table columns:
+
+* Driver.
+* Trip.
+* Advance total.
+* Approved expenses.
+* Amount returned.
+* Payroll recovery.
+* Outstanding balance.
+* Settlement status.
+* Actions.
+
+Provide driver-level and trip-level filtering.
+
+Ensure advance settlement and fuel deduction are separate workflows.
+
+A trip can have:
+
+* A settled advance and a pending fuel deduction.
+* An outstanding advance and no fuel deduction.
+* Both an outstanding advance and an approved fuel deduction.
+* No advance but a fuel deduction requiring review.
+
+---
+
+# 13. FUEL DEDUCTION MANAGEMENT
+
+Create a dedicated page for reviewing deductions across all trips.
+
+Summary cards:
+
+* Total potential deductions.
+* Pending approval.
+* Approved deductions.
+* Rejected deductions.
+* Posted to payroll.
+* Already recovered.
+
+Table columns:
+
+* Trip number.
+* Trip date.
+* Driver.
+* Vehicle.
+* Accepted distance.
+* Actual mileage.
+* Benchmark.
+* Excess fuel.
+* Potential deduction.
+* Approved deduction.
+* Status.
+* Payroll month.
+* Actions.
+
+Actions:
+
+* View calculation.
+* Approve.
+* Reject.
+* Adjust with reason.
+* View audit history.
+
+Approval must be an explicit operation.
+
+Prevent the same deduction from being posted to payroll more than once.
+
+---
+
+# 14. MONTHLY PAYROLL
+
+Create a dedicated payroll dashboard and payroll processing workflow.
+
+The payroll module should use effective-dated salary structures and approved payroll items.
+
+## Payroll dashboard
+
+Display:
+
+* Current payroll month.
+* Active drivers.
+* Payroll status.
+* Total gross earnings.
+* Total deductions.
+* Total net payable.
+* Pending fuel deduction approvals.
+* Pending advance recovery approvals.
+* Drivers requiring payroll review.
+
+## Payroll generation workflow
+
+1. Select the payroll month.
+2. Retrieve eligible drivers.
+3. Retrieve the salary structure applicable to each driver for that month.
+4. Calculate salary components.
+5. Retrieve approved earnings and allowances.
+6. Retrieve approved fuel deductions that have not already been posted.
+7. Retrieve explicitly authorized advance recoveries.
+8. Apply other configured payroll deductions.
+9. Calculate gross earnings, total deductions, and net salary.
+10. Display payroll validation warnings.
+11. Allow review and correction of eligible draft items.
+12. Submit for approval.
+13. Finalize payroll.
+14. Generate individual payslips.
+
+Use this conceptual formula:
+
+Gross Earnings = Sum of applicable earnings components.
+
+Total Deductions = Sum of applicable approved deductions and authorized recoveries.
+
+Net Salary = Gross Earnings − Total Deductions.
+
+The exact salary and payroll formulas must be configurable according to company policy.
+
+Do not invent statutory tax, provident fund, insurance, or other payroll rules that have not been specified.
+
+## Payroll table
+
+Columns:
+
+* Driver number.
+* Driver name.
+* Salary structure.
+* Basic salary.
+* Other earnings.
+* Gross earnings.
+* Fuel deduction.
+* Advance recovery.
+* Other deductions.
+* Total deductions.
+* Net payable.
+* Approval status.
+* Payment status.
+* Actions.
+
+Include totals and filters.
+
+Allow payroll details to be inspected before finalization.
+
+Once payroll is finalized, preserve a snapshot of the salary components and calculation inputs.
+
+Do not recalculate finalized payroll automatically when a trip, salary structure, benchmark, or deduction changes later.
+
+Post-finalization corrections must use a controlled adjustment workflow.
+
+---
+
+# 15. PAYSLIPS
+
+Create a dedicated payslip page.
+
+Allow authorized users to:
+
+* View payslips by month.
+* Search by driver.
+* View a detailed payslip.
+* Download a PDF.
+* Download payslips in bulk for a finalized payroll run.
+
+The payslip should contain:
+
+* Company identity.
+* Driver name and number.
+* Payroll month.
+* Earnings breakdown.
+* Gross earnings.
+* Fuel deductions.
+* Authorized advance recovery.
+* Other deductions.
+* Total deductions.
+* Net salary payable.
+* Payment status.
+* Payroll reference number.
+
+Make the PDF clean, professional, printable, and consistent with the emerald, gray, and white design system.
+
+Do not expose one driver's payslip to another driver.
+
+---
+
+# 16. TLCM PRO INTEGRATION
+
+The existing TLCM Pro application is the authoritative system for:
+
+* Vehicle master records.
+* Tyre master records.
+* Tyre installation and removal history.
+* Vehicle odometer logs.
+* Tyre lifecycle distance totals.
+
+The Trip Sheet application owns:
+
+* Trip records.
+* Route segments.
+* Trip distance records.
+* Trip fuel consumption.
+* Fuel top-ups.
+* Trip expenses.
+* Driver advances.
+* Trip settlements.
+* Proposed and approved trip fuel deductions.
+* Trip-related payroll data, subject to final payroll ownership.
+
+Integration rules:
+
+1. Use the TLCM Pro backend API.
+2. Do not connect directly to its PostgreSQL database.
+3. Use the TLCM Pro vehicle ID as the authoritative external identifier.
+4. Submit eligible odometer events through the API.
+5. Submit eligible trip-distance attribution only when required validation succeeds.
+6. STEPNEY/spare tyres must not accumulate tyre usage distance.
+7. If a tyre is installed or removed during a trip, distance attribution must respect the relevant lifecycle timestamps and validated odometer records.
+8. Unresolved odometer sequences must place tyre-distance attribution on hold.
+9. Trip-distance attribution must be idempotent.
+10. Corrections must trigger controlled recalculation or reversal operations.
+11. Integration failures must be visible and retryable.
+12. Maintain integration logs and reconciliation status.
+
+For the frontend, build a TLCM Pro integration status page with:
+
+* Connection status.
+* Last successful synchronization.
+* Pending integration jobs.
+* Failed jobs.
+* Retry actions.
+* Vehicle synchronization status.
+* Odometer submission status.
+* Tyre-distance reconciliation status.
+
+If the actual API contract is unavailable, use a mock service interface. Do not invent a real API URL or pretend integration is working.
+
+---
+
+# 17. AUDIT HISTORY AND VALIDATION
+
+This application handles operational records and employee finances. Build auditability into the interface and data model.
+
+For important changes, preserve:
+
+* Original value.
+* Updated value.
+* User who made the change.
+* Timestamp.
+* Reason for change.
+* Approval information, where applicable.
+
+Apply this to:
+
+* Odometer corrections.
+* Trip distance corrections.
+* Fuel consumption changes.
+* Expense approval.
+* Advance settlement.
+* Fuel deduction adjustments.
+* Salary structure changes.
+* Payroll adjustments.
+
+Use confirmation dialogs for irreversible or financially significant operations.
+
+Prevent duplicate submissions.
+
+Use explicit statuses rather than inferring approval from the existence of a record.
+
+Keep the following statuses independent:
+
+* Trip operational status.
+* Odometer validation status.
+* Expense approval status.
+* Advance settlement status.
+* Fuel deduction approval status.
+* Payroll status.
+* TLCM Pro integration status.
+
+---
+
+# 18. TECHNICAL IMPLEMENTATION
+
+Build the frontend using the following stack:
+
+* React.
+* TypeScript.
+* Vite.
+* Tailwind CSS.
+* shadcn/ui.
+* Lucide React.
+* React Router.
+* TanStack Query for server state.
+* React Hook Form.
+* Zod for form validation.
+* Recharts for analytics.
+
+Use reusable components and a modular feature-based folder structure.
+
+Suggested structure:
+
+src/
+app/
+router/
+providers/
+components/
+layout/
+navigation/
+data-table/
+forms/
+dialogs/
+feedback/
+features/
+dashboard/
+drivers/
+salary-structures/
+advances/
+vehicles/
+fuel-topups/
+trips/
+expenses/
+settlements/
+fuel-deductions/
+mileage-benchmarks/
+payroll/
+payslips/
+integrations/
+audit/
+settings/
+services/
+api-client.ts
+driver.service.ts
+vehicle.service.ts
+trip.service.ts
+fuel.service.ts
+payroll.service.ts
+tlcm.service.ts
+types/
+schemas/
+hooks/
+utils/
+
+Adapt the structure when appropriate, but maintain separation between UI, API services, validation, and business calculations.
+
+Do not put all business logic inside React components.
+
+Implement important calculations as reusable, independently testable TypeScript functions.
+
+Use environment variables for API base URLs.
+
+Do not hardcode secrets or credentials.
+
+Provide loading, empty, success, and error states.
+
+Use realistic sample data only when backend endpoints are unavailable. Keep mock data behind service interfaces so the backend can replace it cleanly.
+
+Persist form changes through service methods. If using local mock persistence during initial development, clearly isolate it and do not present it as a production database.
+
+---
+
+# 19. DATABASE AND BACKEND READINESS
+
+The application will eventually use a dedicated PostgreSQL database.
+
+Design the frontend around these logical entities:
+
+* Driver.
+* SalaryStructure.
+* SalaryComponent.
+* DriverSalaryAssignment.
+* VehicleReference.
+* DriverVehicleAssignment.
+* FuelTopUp.
+* Trip.
+* TripRouteSegment.
+* TripOdometerReading.
+* TripDistanceRecord.
+* TripFuelConsumption.
+* TripMileageCalculation.
+* MileageBenchmark.
+* TripExpense.
+* DriverAdvanceTransaction.
+* TripAdvanceSettlement.
+* AdvanceSettlementTransaction.
+* TripFuelDeduction.
+* FuelDeductionApproval.
+* PayrollRun.
+* PayrollRecord.
+* PayrollLineItem.
+* Payslip.
+* AuditLog.
+* IntegrationJob.
+* IntegrationResult.
+
+These names describe logical entities, not necessarily one-to-one final database tables.
+
+Use stable IDs and explicit relationships.
+
+Avoid duplicating driver, vehicle, trip, and financial information across unrelated records.
+
+Money must use decimal-safe representations, not binary floating-point calculations.
+
+Represent timestamps consistently and preserve historical calculation inputs.
+
+Use transaction-safe operations for financial settlements and payroll finalization in the eventual backend.
+
+---
+
+# 20. BUSINESS RULES THAT MUST NEVER BE VIOLATED
+
+1. Every driver has a stable unique identifier.
+2. Every trip has a stable unique identifier.
+3. Every advance is an independent transaction.
+4. A trip may have multiple advances.
+5. A trip may have multiple route segments.
+6. A trip may have multiple expenses.
+7. Fuel top-ups are different from trip fuel consumption.
+8. A missing odometer reading must never be fabricated as a measured reading.
+9. Measured, reported, and derived distance must remain distinguishable.
+10. Odometer discrepancies must be flagged.
+11. Reported trip distance can remain available for operational reporting while tyre attribution is held.
+12. Trip mileage requires valid distance and fuel-consumption values.
+13. Only approved expenses count toward advance settlement.
+14. Outstanding advances are not automatically salary deductions.
+15. Fuel deductions require review and approval before payroll posting.
+16. The same approved deduction cannot be posted twice.
+17. A trip can be operationally complete without being financially settled.
+18. Historical salary structures must be preserved.
+19. Finalized payroll must not be silently recalculated.
+20. TLCM Pro integration must use its backend API.
+21. Tyre-distance attribution must respect validated odometer data and tyre lifecycle events.
+22. STEPNEY/spare tyres must not accumulate usage distance.
+23. Financially significant corrections must be auditable.
+24. The system must clearly distinguish actual expenditure from calculated or allocated operational costs.
+
+---
+
+# 21. USER EXPERIENCE EXPECTATIONS
+
+Build for actual day-to-day use by fleet operators and finance teams.
+
+Prioritize:
+
+* Fast data entry.
+* Clear financial summaries.
+* Minimal unnecessary navigation.
+* Searchable tables.
+* Repeatable route and expense entry.
+* Visible validation messages.
+* Clear approval workflows.
+* Accurate calculations.
+* Easy identification of pending work.
+* Traceable financial history.
+
+Forms must have proper labels, validation, helper text, and error messages.
+
+Use sensible defaults without silently filling missing business-critical values.
+
+Avoid unnecessary confirmation dialogs for ordinary edits, but require confirmation for payroll finalization, financial postings, and other significant actions.
+
+---
+
+# 22. REQUIRED OUTPUT
+
+Build the application in a structured sequence.
+
+PHASE 1 — DESIGN SYSTEM AND APP SHELL
+
+* Establish the emerald, gray, and white theme.
+* Build the sidebar and top header.
+* Create reusable buttons, inputs, cards, tables, badges, dialogs, and page headers.
+
+PHASE 2 — OPERATIONAL MODULES
+
+* Dashboard.
+* Driver management.
+* Salary structure management.
+* Driver advances.
+* Vehicle reference.
+* Fuel top-ups.
+* Trip creation and trip detail.
+* Route segments.
+* Odometer and distance handling.
+* Fuel consumption.
+* Trip expenses.
+
+PHASE 3 — FINANCIAL MODULES
+
+* Advance settlements.
+* Mileage benchmarks.
+* Fuel deduction calculation and approval.
+* Driver financial ledgers.
+
+PHASE 4 — PAYROLL
+
+* Payroll dashboard.
+* Monthly payroll generation.
+* Payroll review and approval.
+* Finalization.
+* Payslip generation and PDF download.
+
+PHASE 5 — INTEGRATION AND AUDIT
+
+* TLCM Pro integration status.
+* Integration logs and retries.
+* Audit history.
+* Validation and reconciliation states.
+
+Deliver a coherent application, not a collection of unrelated mockup pages.
+
+All navigation, forms, tables, dialogs, filters, calculations, and primary actions should work within the available frontend environment.
+
+Use realistic sample data and demonstrate the complete journey from creating a driver to generating that driver's payslip.
+
+Do not claim that real backend persistence, authentication, payroll posting, or TLCM Pro integration works unless it has actually been implemented and tested.
+
+When a backend dependency is unavailable, clearly isolate it behind a service interface and provide an appropriate mock implementation.
+
+Start by creating the design system and application shell, then implement the modules in the order specified above.
