@@ -78,6 +78,8 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
       departureTime: '08:30',
       arrivalTime: '11:45',
       distanceKm: 135,
+      tonnage: 28,
+      cargoDescription: 'OEM Auto Components (Full Load)',
       notes: 'NH-48 Corridor'
     },
     {
@@ -88,6 +90,8 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
       departureTime: '12:30',
       arrivalTime: '16:30',
       distanceKm: 215,
+      tonnage: 28,
+      cargoDescription: 'OEM Auto Components (Unloading)',
       notes: 'Industrial Delivery'
     },
     {
@@ -98,6 +102,8 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
       departureTime: '17:30',
       arrivalTime: '19:00',
       distanceKm: 40,
+      tonnage: 0,
+      cargoDescription: 'Empty Repositioning',
       notes: 'Return consignment loading'
     },
     {
@@ -108,7 +114,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
       departureTime: '20:00',
       arrivalTime: '02:00',
       distanceKm: 60,
-      notes: 'Return leg to base'
+      tonnage: 18,
+      cargoDescription: 'Return Spares Backhaul',
+      notes: 'Final leg to Madhavaram yard'
     }
   ]);
 
@@ -236,12 +244,16 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
   // Route segments handler
   const handleAddSegment = () => {
     const nextSeq = routeSegments.length + 1;
+    const selVeh = vehicles.find(v => v.id === vehicleId);
     const newSeg: RouteSegment = {
       id: `seg-${Date.now()}`,
       sequence: nextSeq,
       fromLocation: routeSegments[routeSegments.length - 1]?.toLocation || 'Intermediate City',
       toLocation: 'Next Waypoint',
-      distanceKm: 50
+      distanceKm: 50,
+      tonnage: selVeh?.tonnage || 28,
+      cargoDescription: 'Commercial Consignment',
+      notes: ''
     };
     setRouteSegments([...routeSegments, newSeg]);
   };
@@ -601,96 +613,237 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
           <div className="space-y-4 text-xs">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-bold text-gray-900 text-sm">Section C: Multi-Segment Route Legs</h4>
+                <h4 className="font-bold text-gray-900 text-sm">Section C: Multi-Segment Route Legs & Payload Tonnage</h4>
                 <p className="text-gray-500 mt-0.5">
-                  Record multiple waypoints within one trip without double-counting trip-level distance.
+                  Record individual segment origins, destinations, distances, and payload tonnage (laden vs empty return legs).
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleAddSegment}
-                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-semibold flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Route Segment
               </button>
             </div>
 
-            <div className="space-y-2 max-h-72 overflow-y-auto">
+            {/* Column Header Guide */}
+            <div className="hidden sm:grid sm:grid-cols-12 gap-2 px-3 py-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              <div className="col-span-1">Leg</div>
+              <div className="col-span-3">From Origin</div>
+              <div className="col-span-3">To Destination</div>
+              <div className="col-span-2 text-right">Distance (km)</div>
+              <div className="col-span-2 text-right">Tonnage (MT)</div>
+              <div className="col-span-1 text-center">Action</div>
+            </div>
+
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
               {routeSegments.map((seg, idx) => (
                 <div
                   key={seg.id}
-                  className="p-3 rounded-lg border border-gray-200 bg-white shadow-xs flex items-center gap-3"
+                  className="p-3 rounded-xl border border-gray-200 bg-white shadow-xs space-y-2 hover:border-emerald-300 transition-all"
                 >
-                  <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0">
-                    {idx + 1}
-                  </span>
-                  <div className="grid grid-cols-4 gap-2 flex-1">
-                    <input
-                      type="text"
-                      value={seg.fromLocation}
-                      onChange={e => {
-                        const updated = [...routeSegments];
-                        updated[idx].fromLocation = e.target.value;
-                        setRouteSegments(updated);
-                      }}
-                      placeholder="From..."
-                      className="px-2 py-1.5 rounded border border-gray-300"
-                    />
-                    <input
-                      type="text"
-                      value={seg.toLocation}
-                      onChange={e => {
-                        const updated = [...routeSegments];
-                        updated[idx].toLocation = e.target.value;
-                        setRouteSegments(updated);
-                      }}
-                      placeholder="To..."
-                      className="px-2 py-1.5 rounded border border-gray-300"
-                    />
-                    <input
-                      type="number"
-                      value={seg.distanceKm}
-                      onChange={e => {
-                        const updated = [...routeSegments];
-                        updated[idx].distanceKm = Number(e.target.value);
-                        setRouteSegments(updated);
-                      }}
-                      placeholder="Segment km"
-                      className="px-2 py-1.5 rounded border border-gray-300 font-mono"
-                    />
-                    <input
-                      type="text"
-                      value={seg.notes || ''}
-                      onChange={e => {
-                        const updated = [...routeSegments];
-                        updated[idx].notes = e.target.value;
-                        setRouteSegments(updated);
-                      }}
-                      placeholder="Notes (e.g. NH-48)"
-                      className="px-2 py-1.5 rounded border border-gray-300"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                    {/* Leg sequence indicator */}
+                    <div className="sm:col-span-1 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 text-xs">
+                        {idx + 1}
+                      </span>
+                    </div>
+
+                    {/* From */}
+                    <div className="sm:col-span-3">
+                      <input
+                        type="text"
+                        value={seg.fromLocation}
+                        onChange={e => {
+                          const updated = [...routeSegments];
+                          updated[idx].fromLocation = e.target.value;
+                          setRouteSegments(updated);
+                        }}
+                        placeholder="From location..."
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 bg-gray-50/50"
+                      />
+                    </div>
+
+                    {/* To */}
+                    <div className="sm:col-span-3">
+                      <input
+                        type="text"
+                        value={seg.toLocation}
+                        onChange={e => {
+                          const updated = [...routeSegments];
+                          updated[idx].toLocation = e.target.value;
+                          setRouteSegments(updated);
+                        }}
+                        placeholder="To destination..."
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 bg-gray-50/50"
+                      />
+                    </div>
+
+                    {/* Distance km */}
+                    <div className="sm:col-span-2">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          value={seg.distanceKm}
+                          onChange={e => {
+                            const updated = [...routeSegments];
+                            updated[idx].distanceKm = Number(e.target.value);
+                            setRouteSegments(updated);
+                          }}
+                          placeholder="Distance"
+                          className="w-full px-2 py-1.5 pr-7 text-right rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 font-mono font-bold"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-sans pointer-events-none">
+                          km
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Tonnage MT */}
+                    <div className="sm:col-span-2">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="120"
+                          value={seg.tonnage !== undefined ? seg.tonnage : ''}
+                          onChange={e => {
+                            const updated = [...routeSegments];
+                            updated[idx].tonnage = e.target.value === '' ? undefined : Number(e.target.value);
+                            setRouteSegments(updated);
+                          }}
+                          placeholder="Tonnage"
+                          className={`w-full px-2 py-1.5 pr-7 text-right rounded-lg border font-mono font-bold focus:outline-none focus:border-emerald-600 ${
+                            seg.tonnage === 0
+                              ? 'border-amber-300 bg-amber-50/40 text-amber-900'
+                              : 'border-emerald-300 bg-emerald-50/30 text-emerald-900'
+                          }`}
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-sans font-bold pointer-events-none">
+                          MT
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Remove Action */}
+                    <div className="sm:col-span-1 flex items-center justify-center">
+                      {routeSegments.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSegment(idx)}
+                          title="Remove Segment"
+                          className="p-1.5 text-gray-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {routeSegments.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSegment(idx)}
-                      className="p-1.5 text-rose-500 hover:text-rose-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+
+                  {/* Second row: Quick tonnage helper buttons + Cargo / consignment description */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-gray-100 text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-400 text-[10px] uppercase font-semibold">Tonnage Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...routeSegments];
+                          const selVeh = vehicles.find(v => v.id === vehicleId);
+                          updated[idx].tonnage = selVeh?.tonnage || 28;
+                          updated[idx].cargoDescription = 'Full Rated Payload';
+                          setRouteSegments(updated);
+                        }}
+                        className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold"
+                      >
+                        Full ({vehicles.find(v => v.id === vehicleId)?.tonnage || 28}T)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...routeSegments];
+                          const selVeh = vehicles.find(v => v.id === vehicleId);
+                          updated[idx].tonnage = Math.round((selVeh?.tonnage || 28) / 2);
+                          updated[idx].cargoDescription = 'Partial Load Consignment';
+                          setRouteSegments(updated);
+                        }}
+                        className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-semibold"
+                      >
+                        Half Load ({Math.round((vehicles.find(v => v.id === vehicleId)?.tonnage || 28) / 2)}T)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...routeSegments];
+                          updated[idx].tonnage = 0;
+                          updated[idx].cargoDescription = 'Unladen / Empty Repositioning Leg';
+                          setRouteSegments(updated);
+                        }}
+                        className="px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold"
+                      >
+                        Empty Return (0T)
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-1 max-w-sm">
+                      <input
+                        type="text"
+                        value={seg.cargoDescription || ''}
+                        onChange={e => {
+                          const updated = [...routeSegments];
+                          updated[idx].cargoDescription = e.target.value;
+                          setRouteSegments(updated);
+                        }}
+                        placeholder="Cargo description (e.g. Cold-Rolled Steel Coils)..."
+                        className="w-full px-2 py-1 rounded border border-gray-200 text-[11px] focus:outline-none focus:border-emerald-600 bg-gray-50/50"
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between">
-              <span className="text-gray-600">
-                Sum of segment distances: {routeSegments.reduce((s, seg) => s + seg.distanceKm, 0)} km
-              </span>
-              <span className="font-bold text-gray-900">
-                Accepted Trip Distance: {formatKm(odoEval.acceptedDistance)}
-              </span>
-            </div>
+            {/* Segment Tonnage & Distance Analytics Summary */}
+            {(() => {
+              const totalSegDist = routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0), 0);
+              const totalTonneKm = routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0) * (seg.tonnage || 0), 0);
+              const avgTonnage = totalSegDist > 0 ? (totalTonneKm / totalSegDist).toFixed(1) : '0';
+              const maxTonnage = routeSegments.length > 0 ? Math.max(...routeSegments.map(s => s.tonnage || 0)) : 0;
+              const ladenDist = routeSegments.filter(s => (s.tonnage || 0) > 0).reduce((sum, s) => sum + (s.distanceKm || 0), 0);
+              const emptyDist = routeSegments.filter(s => (s.tonnage || 0) === 0).reduce((sum, s) => sum + (s.distanceKm || 0), 0);
+
+              return (
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Total Segments</span>
+                    <span className="font-bold text-gray-900">{routeSegments.length} Route Legs</span>
+                    <span className="text-[10px] text-gray-400 block">Sum: {totalSegDist} km</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Weighted Avg Payload</span>
+                    <span className="font-bold text-emerald-800 font-mono text-sm">{avgTonnage} Tonnes</span>
+                    <span className="text-[10px] text-gray-400 block">Peak: {maxTonnage}T Payload</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Laden vs Empty Legs</span>
+                    <span className="font-semibold text-gray-800">
+                      Laden: {ladenDist} km • Empty: {emptyDist} km
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-semibold block">
+                      {totalSegDist > 0 ? `${Math.round((ladenDist / totalSegDist) * 100)}% Laden haul` : ''}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Accepted Trip Distance</span>
+                    <span className="font-bold text-gray-900 font-mono text-sm">{formatKm(odoEval.acceptedDistance)}</span>
+                    <span className="text-[10px] text-gray-400 block">Odo evaluated</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -966,6 +1119,25 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
               <div className="flex justify-between py-1">
                 <span className="text-gray-500">Accepted Trip Distance:</span>
                 <span className="font-bold text-emerald-800">{formatKm(odoEval.acceptedDistance)}</span>
+              </div>
+              <div className="flex justify-between py-1 items-start">
+                <span className="text-gray-500">Route Segments & Payload:</span>
+                <div className="text-right">
+                  <span className="font-bold text-emerald-800">
+                    {routeSegments.length} Segments • {(() => {
+                      const totalDist = routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0), 0);
+                      const totalTonneKm = routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0) * (seg.tonnage || 0), 0);
+                      return totalDist > 0 ? `${(totalTonneKm / totalDist).toFixed(1)} MT avg payload` : '0 MT';
+                    })()}
+                  </span>
+                  <div className="text-[10px] text-gray-500 mt-0.5 space-x-1">
+                    {routeSegments.map((s, idx) => (
+                      <span key={s.id || idx} className="inline-block bg-gray-100 rounded px-1.5 py-0.5 text-gray-700">
+                        Leg {idx + 1}: {s.fromLocation}→{s.toLocation} ({s.tonnage !== undefined ? `${s.tonnage}T` : '—'})
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-gray-500">Fuel & Mileage:</span>

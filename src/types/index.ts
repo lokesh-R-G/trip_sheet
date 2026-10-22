@@ -124,6 +124,8 @@ export interface RouteSegment {
   departureTime?: string;
   arrivalTime?: string;
   distanceKm: number;
+  tonnage?: number; // Segment payload in Metric Tonnes (e.g. 28T, 15T, or 0T for unladen/empty leg)
+  cargoDescription?: string;
   notes?: string;
 }
 
