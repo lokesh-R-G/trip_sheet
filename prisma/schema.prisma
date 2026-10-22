@@ -1,0 +1,533 @@
+// Prisma Schema for Trip Sheet / Bata Sheet Management System
+// Datasource: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================================
+// 1. Driver and Salary Management
+// ========================================================
+
+model Driver {
+  id               String   @id @default(uuid()) @db.Uuid
+  driverNumber     String   @unique @map("driver_number") @db.VarChar(50)
+  fullName         String   @map("full_name") @db.VarChar(255)
+  phone            String   @db.VarChar(30)
+  email            String?  @db.VarChar(255)
+  address          String   @db.Text
+  licenseNumber    String   @unique @map("license_number") @db.VarChar(100)
+  licenseExpiry    DateTime @map("license_expiry") @db.Date
+  joiningDate      DateTime @map("joining_date") @db.Date
+  status           String   @db.VarChar(30) // active, on_leave, suspended, resigned, terminated
+  currentVehicleId String?  @map("current_vehicle_id") @db.Uuid
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  currentVehicle     Vehicle?                 @relation("DriverCurrentVehicle", fields: [currentVehicleId], references: [id], onDelete: SetNull)
+  salaryAssignments  DriverSalaryAssignment[]
+  advances           DriverAdvanceTransaction[]
+  trips              Trip[]
+  payrollRecords     PayrollRecord[]
+
+  @@index([status])
+  @@index([currentVehicleId])
+  @@map("drivers")
+}
+
+model SalaryStructure {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(150)
+  code          String   @unique @db.VarChar(50)
+  description   String?  @db.Text
+  effectiveDate DateTime @map("effective_date") @db.Date
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  components  SalaryComponent[]
+  assignments DriverSalaryAssignment[]
+
+  @@map("salary_structures")
+}
+
+model SalaryComponent {
+  id                 String   @id @default(uuid()) @db.Uuid
+  salaryStructureId  String   @map("salary_structure_id") @db.Uuid
+  name               String   @db.VarChar(100)
+  category           String   @db.VarChar(50) // basic, allowance, bata, statutory_deduction, other
+  type               String   @db.VarChar(20) // earning, deduction
+  calculationType    String   @map("calculation_type") @db.VarChar(20) // fixed, percentage
+  amountOrPercentage Decimal  @map("amount_or_percentage") @db.Decimal(12, 2)
+  applicabilityRules String?  @map("applicability_rules") @db.Text
+  isActive           Boolean  @default(true) @map("is_active")
+
+  // Relations
+  salaryStructure SalaryStructure @relation(fields: [salaryStructureId], references: [id], onDelete: Cascade)
+
+  @@index([salaryStructureId])
+  @@map("salary_components")
+}
+
+model DriverSalaryAssignment {
+  id                String    @id @default(uuid()) @db.Uuid
+  driverId          String    @map("driver_id") @db.Uuid
+  salaryStructureId String    @map("salary_structure_id") @db.Uuid
+  effectiveFrom     DateTime  @map("effective_from") @db.Date
+  effectiveTo       DateTime? @map("effective_to") @db.Date
+  status            String    @db.VarChar(20) // active, scheduled, expired
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  driver          Driver          @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  salaryStructure SalaryStructure @relation(fields: [salaryStructureId], references: [id], onDelete: Restrict)
+
+  @@index([driverId, effectiveFrom])
+  @@index([salaryStructureId])
+  @@map("driver_salary_assignments")
+}
+
+// ========================================================
+// 2. Vehicle and Fuel Management
+// ========================================================
+
+model Vehicle {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tlcmVehicleId      String   @unique @map("tlcm_vehicle_id") @db.VarChar(100)
+  registrationNumber String   @unique @map("registration_number") @db.VarChar(50)
+  vehicleType        String   @map("vehicle_type") @db.VarChar(50)
+  makeModel          String   @map("make_model") @db.VarChar(100)
+  tonnage            Decimal  @db.Decimal(6, 2)
+  status             String   @db.VarChar(30) // active, in_maintenance, idle, decommissioned
+  latestOdometer     Int      @default(0) @map("latest_odometer")
+  totalTripDistance  Int      @default(0) @map("total_trip_distance")
+  assignedTyresCount Int      @map("assigned_tyres_count")
+  hasStepneyFitted   Boolean  @default(true) @map("has_stepney_fitted")
+  syncStatus         String   @map("sync_status") @db.VarChar(30) // connected, last_sync, sync_pending, sync_failed
+  lastSyncTime       DateTime @map("last_sync_time") @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  assignedDrivers   Driver[]           @relation("DriverCurrentVehicle")
+  fuelTopUps        FuelTopUp[]
+  mileageBenchmarks MileageBenchmark[]
+  trips             Trip[]
+  integrationJobs   IntegrationJob[]
+
+  @@index([status])
+  @@index([syncStatus])
+  @@map("vehicles")
+}
+
+model FuelTopUp {
+  id               String   @id @default(uuid()) @db.Uuid
+  vehicleId        String   @map("vehicle_id") @db.Uuid
+  dateTime         DateTime @map("date_time") @db.Timestamptz(6)
+  litres           Decimal  @db.Decimal(10, 2)
+  pricePerLitre    Decimal  @map("price_per_litre") @db.Decimal(10, 2)
+  totalCost        Decimal  @map("total_cost") @db.Decimal(12, 2)
+  fuelStation      String   @map("fuel_station") @db.VarChar(255)
+  odometerReading  Int?     @map("odometer_reading")
+  paymentMethod    String   @map("payment_method") @db.VarChar(50)
+  receiptReference String   @map("receipt_reference") @db.VarChar(100)
+  recordedBy       String   @map("recorded_by") @db.VarChar(100)
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, dateTime])
+  @@map("fuel_top_ups")
+}
+
+model MileageBenchmark {
+  id                        String    @id @default(uuid()) @db.Uuid
+  name                      String    @db.VarChar(150)
+  vehicleId                 String?   @map("vehicle_id") @db.Uuid
+  vehicleType               String?   @map("vehicle_type") @db.VarChar(50)
+  minTonnage                Decimal?  @map("min_tonnage") @db.Decimal(6, 2)
+  maxTonnage                Decimal?  @map("max_tonnage") @db.Decimal(6, 2)
+  expectedMileageKmPerLitre Decimal   @map("expected_mileage_km_per_litre") @db.Decimal(6, 2)
+  permittedTolerancePercent Decimal   @map("permitted_tolerance_percent") @db.Decimal(5, 2)
+  effectiveFrom             DateTime  @map("effective_from") @db.Date
+  effectiveTo               DateTime? @map("effective_to") @db.Date
+  status                    String    @db.VarChar(20) // active, inactive
+  priority                  Int       @default(1)
+  notes                     String?   @db.Text
+  createdAt                 DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  vehicle        Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  fuelDeductions TripFuelDeduction[]
+
+  @@index([vehicleId])
+  @@index([vehicleType])
+  @@index([status, effectiveFrom])
+  @@map("mileage_benchmarks")
+}
+
+// ========================================================
+// 3. Trip Management
+// ========================================================
+
+model Trip {
+  id               String    @id @default(uuid()) @db.Uuid
+  tripNumber       String    @unique @map("trip_number") @db.VarChar(50)
+  driverId         String    @map("driver_id") @db.Uuid
+  vehicleId        String    @map("vehicle_id") @db.Uuid
+  startDate        DateTime  @map("start_date") @db.Timestamptz(6)
+  endDate          DateTime? @map("end_date") @db.Timestamptz(6)
+  startingLocation String    @map("starting_location") @db.VarChar(255)
+  finalDestination String    @map("final_destination") @db.VarChar(255)
+  purpose          String    @db.VarChar(255)
+  status           String    @db.VarChar(30) // draft, in_progress, completed, cancelled
+  notes            String?   @db.Text
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  driver              Driver                     @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle             Vehicle                    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  routeSegments       TripRouteSegment[]
+  odometerRecord      TripOdometerRecord?
+  fuelRecord          TripFuelRecord?
+  expenses            TripExpense[]
+  settlementRecord    TripSettlementRecord?
+  fuelDeduction       TripFuelDeduction?
+  advanceTransactions DriverAdvanceTransaction[]
+  integrationJobs     IntegrationJob[]
+
+  @@index([driverId])
+  @@index([vehicleId])
+  @@index([status, startDate])
+  @@map("trips")
+}
+
+model TripRouteSegment {
+  id            String    @id @default(uuid()) @db.Uuid
+  tripId        String    @map("trip_id") @db.Uuid
+  sequence      Int
+  fromLocation  String    @map("from_location") @db.VarChar(255)
+  toLocation    String    @map("to_location") @db.VarChar(255)
+  departureTime DateTime? @map("departure_time") @db.Timestamptz(6)
+  arrivalTime   DateTime? @map("arrival_time") @db.Timestamptz(6)
+  distanceKm    Decimal   @map("distance_km") @db.Decimal(10, 2)
+  notes         String?   @db.Text
+
+  // Relations
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, sequence])
+  @@index([tripId])
+  @@map("trip_route_segments")
+}
+
+model TripOdometerRecord {
+  id                        String    @id @default(uuid()) @db.Uuid
+  tripId                    String    @unique @map("trip_id") @db.Uuid
+  startingReading           Int?      @map("starting_reading")
+  startingTimestamp         DateTime? @map("starting_timestamp") @db.Timestamptz(6)
+  startingSource            String?   @map("starting_source") @db.VarChar(20) // measured, manual
+  endingReading             Int?      @map("ending_reading")
+  endingTimestamp           DateTime? @map("ending_timestamp") @db.Timestamptz(6)
+  endingSource              String?   @map("ending_source") @db.VarChar(20) // measured, manual
+  odometerCase              String    @map("odometer_case") @db.VarChar(40) // case_1_both_available, case_2_derived_ending, case_3_unreported_odometer, case_4_inconsistent_sequence
+  measuredDistance          Int?      @map("measured_distance")
+  derivedDistance           Int?      @map("derived_distance")
+  reportedDistance          Int?      @map("reported_distance")
+  acceptedDistance          Int       @map("accepted_distance")
+  derivedEndingReading      Int?      @map("derived_ending_reading")
+  discrepancyFlag           Boolean   @default(false) @map("discrepancy_flag")
+  discrepancyReason         String?   @map("discrepancy_reason") @db.Text
+  validationStatus          String    @map("validation_status") @db.VarChar(30) // verified, provisional, discrepancy_held, unverified
+  tyreAttributionEligible   Boolean   @default(false) @map("tyre_attribution_eligible")
+  tyreAttributionStatus     String    @map("tyre_attribution_status") @db.VarChar(30) // eligible, on_hold, attributed
+  tyreAttributionHoldReason String?   @map("tyre_attribution_hold_reason") @db.Text
+
+  // Relations
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@map("trip_odometer_records")
+}
+
+model TripFuelRecord {
+  id                     String   @id @default(uuid()) @db.Uuid
+  tripId                 String   @unique @map("trip_id") @db.Uuid
+  openingFuelQuantity    Decimal? @map("opening_fuel_quantity") @db.Decimal(10, 2)
+  fuelAddedDuringTrip    Decimal? @map("fuel_added_during_trip") @db.Decimal(10, 2)
+  closingFuelQuantity    Decimal? @map("closing_fuel_quantity") @db.Decimal(10, 2)
+  calculatedConsumption  Decimal? @map("calculated_consumption") @db.Decimal(10, 2)
+  manuallyReportedLitres Decimal? @map("manually_reported_litres") @db.Decimal(10, 2)
+  acceptedFuelLitres     Decimal  @map("accepted_fuel_litres") @db.Decimal(10, 2)
+  measurementMethod      String   @map("measurement_method") @db.VarChar(40) // calculated_balance, manual_slip, fuel_sensor
+  calculationStatus      String   @map("calculation_status") @db.VarChar(30) // verified, discrepancy, provisional
+  tripMileageKmPerLitre  Decimal? @map("trip_mileage_km_per_litre") @db.Decimal(8, 2)
+  mileageStatus          String   @map("mileage_status") @db.VarChar(30) // valid, pending_verification, unavailable
+
+  // Relations
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@map("trip_fuel_records")
+}
+
+model TripExpense {
+  id               String    @id @default(uuid()) @db.Uuid
+  tripId           String    @map("trip_id") @db.Uuid
+  category         String    @db.VarChar(50) // Refreshments, RTO Charges, Tolls, Parking, Loading & Unloading, Repairs, Other Operational
+  description      String    @db.Text
+  amount           Decimal   @db.Decimal(12, 2)
+  expenseDate      DateTime  @map("expense_date") @db.Date
+  paymentMethod    String    @map("payment_method") @db.VarChar(50)
+  receiptReference String?   @map("receipt_reference") @db.VarChar(100)
+  submittedBy      String    @map("submitted_by") @db.VarChar(100)
+  approvalStatus   String    @map("approval_status") @db.VarChar(20) // pending, approved, rejected
+  approvedAmount   Decimal?  @map("approved_amount") @db.Decimal(12, 2)
+  reviewer         String?   @db.VarChar(100)
+  reviewNotes      String?   @map("review_notes") @db.Text
+  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  trip                 Trip                          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  settlementAllocations AdvanceSettlementAllocation[]
+
+  @@index([tripId])
+  @@index([approvalStatus])
+  @@map("trip_expenses")
+}
+
+// ========================================================
+// 4. Advance and Settlement Management
+// ========================================================
+
+model DriverAdvanceTransaction {
+  id              String   @id @default(uuid()) @db.Uuid
+  driverId        String   @map("driver_id") @db.Uuid
+  tripId          String?  @map("trip_id") @db.Uuid
+  referenceNumber String   @unique @map("reference_number") @db.VarChar(100)
+  transactionDate DateTime @map("transaction_date") @db.Date
+  transactionType String   @map("transaction_type") @db.VarChar(40) // advance_issued, cash_return, expense_settlement_credit, payroll_recovery_credit, write_off
+  advanceType     String   @map("advance_type") @db.VarChar(40) // trip_advance, operational_advance, other_approved
+  debitAmount     Decimal  @default(0) @map("debit_amount") @db.Decimal(12, 2)
+  creditAmount    Decimal  @default(0) @map("credit_amount") @db.Decimal(12, 2)
+  paymentMethod   String   @map("payment_method") @db.VarChar(50)
+  notes           String?  @db.Text
+  createdBy       String   @map("created_by") @db.VarChar(100)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  driver                Driver                        @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  trip                  Trip?                         @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  settlementAllocations AdvanceSettlementAllocation[]
+
+  @@index([driverId, transactionDate])
+  @@index([tripId])
+  @@index([transactionType])
+  @@map("driver_advance_transactions")
+}
+
+model AdvanceSettlementAllocation {
+  id                  String   @id @default(uuid()) @db.Uuid
+  advanceTransactionId String  @map("advance_transaction_id") @db.Uuid
+  tripExpenseId       String   @map("trip_expense_id") @db.Uuid
+  allocatedAmount     Decimal  @map("allocated_amount") @db.Decimal(12, 2)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  advanceTransaction DriverAdvanceTransaction @relation(fields: [advanceTransactionId], references: [id], onDelete: Cascade)
+  tripExpense        TripExpense              @relation(fields: [tripExpenseId], references: [id], onDelete: Cascade)
+
+  @@index([advanceTransactionId])
+  @@index([tripExpenseId])
+  @@map("advance_settlement_allocations")
+}
+
+model TripSettlementRecord {
+  id                              String    @id @default(uuid()) @db.Uuid
+  tripId                          String    @unique @map("trip_id") @db.Uuid
+  totalAdvancesIssued             Decimal   @default(0) @map("total_advances_issued") @db.Decimal(12, 2)
+  totalApprovedExpenses           Decimal   @default(0) @map("total_approved_expenses") @db.Decimal(12, 2)
+  amountReturnedByDriver          Decimal   @default(0) @map("amount_returned_by_driver") @db.Decimal(12, 2)
+  otherValidCredits               Decimal   @default(0) @map("other_valid_credits") @db.Decimal(12, 2)
+  outstandingBalance              Decimal   @map("outstanding_balance") @db.Decimal(12, 2)
+  status                          String    @db.VarChar(30) // pending, partially_settled, fully_settled, requires_review
+  authorizedPayrollRecoveryAmount Decimal   @default(0) @map("authorized_payroll_recovery_amount") @db.Decimal(12, 2)
+  settledDate                     DateTime? @map("settled_date") @db.Date
+  createdAt                       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("trip_settlement_records")
+}
+
+model TripFuelDeduction {
+  id                       String            @id @default(uuid()) @db.Uuid
+  tripId                   String            @unique @map("trip_id") @db.Uuid
+  benchmarkId              String?           @map("benchmark_id") @db.Uuid
+  benchmarkMileage         Decimal           @map("benchmark_mileage") @db.Decimal(6, 2)
+  tolerancePercent         Decimal           @map("tolerance_percent") @db.Decimal(5, 2)
+  expectedFuelLitres       Decimal           @map("expected_fuel_litres") @db.Decimal(10, 2)
+  allowedFuelLitres        Decimal           @map("allowed_fuel_litres") @db.Decimal(10, 2)
+  excessFuelLitres         Decimal           @map("excess_fuel_litres") @db.Decimal(10, 2)
+  applicableFuelPrice      Decimal           @map("applicable_fuel_price") @db.Decimal(10, 2)
+  potentialDeductionAmount Decimal           @map("potential_deduction_amount") @db.Decimal(12, 2)
+  approvedDeductionAmount  Decimal           @default(0) @map("approved_deduction_amount") @db.Decimal(12, 2)
+  reviewStatus             String            @map("review_status") @db.VarChar(40) // pending_review, approved, rejected, adjusted, posted_to_payroll, recovered_through_payroll
+  adjustmentReason         String?           @map("adjustment_reason") @db.Text
+  adjustedBy               String?           @map("adjusted_by") @db.VarChar(100)
+  payrollMonth             String?           @map("payroll_month") @db.VarChar(7) // YYYY-MM
+  createdAt                DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  trip             Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  benchmark        MileageBenchmark? @relation(fields: [benchmarkId], references: [id], onDelete: SetNull)
+  payrollLineItems PayrollLineItem[]
+
+  @@index([benchmarkId])
+  @@index([reviewStatus])
+  @@index([payrollMonth])
+  @@map("trip_fuel_deductions")
+}
+
+// ========================================================
+// 5. Payroll Management
+// ========================================================
+
+model PayrollRun {
+  id                     String    @id @default(uuid()) @db.Uuid
+  month                  String    @unique @db.VarChar(7) // YYYY-MM
+  generatedDate          DateTime  @map("generated_date") @db.Timestamptz(6)
+  status                 String    @db.VarChar(30) // draft, under_review, approved, finalized
+  totalEligibleDrivers   Int       @map("total_eligible_drivers")
+  totalGrossEarnings     Decimal   @map("total_gross_earnings") @db.Decimal(14, 2)
+  totalDeductions        Decimal   @map("total_deductions") @db.Decimal(14, 2)
+  totalNetPayable        Decimal   @map("total_net_payable") @db.Decimal(14, 2)
+  totalFuelDeductions    Decimal   @map("total_fuel_deductions") @db.Decimal(14, 2)
+  totalAdvanceRecoveries Decimal   @map("total_advance_recoveries") @db.Decimal(14, 2)
+  finalizedAt            DateTime? @map("finalized_at") @db.Timestamptz(6)
+  finalizedBy            String?   @map("finalized_by") @db.VarChar(100)
+  version                Int       @default(1)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  records PayrollRecord[]
+
+  @@index([status])
+  @@map("payroll_runs")
+}
+
+model PayrollRecord {
+  id                   String   @id @default(uuid()) @db.Uuid
+  payrollRunId         String   @map("payroll_run_id") @db.Uuid
+  driverId             String   @map("driver_id") @db.Uuid
+  salaryStructureName  String   @map("salary_structure_name") @db.VarChar(150)
+  basicSalary          Decimal  @map("basic_salary") @db.Decimal(12, 2)
+  hra                  Decimal  @db.Decimal(12, 2)
+  otherAllowances      Decimal  @map("other_allowances") @db.Decimal(12, 2)
+  tripBata             Decimal  @map("trip_bata") @db.Decimal(12, 2)
+  grossEarnings        Decimal  @map("gross_earnings") @db.Decimal(12, 2)
+  fuelDeductions       Decimal  @map("fuel_deductions") @db.Decimal(12, 2)
+  advanceRecoveries    Decimal  @map("advance_recoveries") @db.Decimal(12, 2)
+  otherDeductions      Decimal  @map("other_deductions") @db.Decimal(12, 2)
+  totalDeductions      Decimal  @map("total_deductions") @db.Decimal(12, 2)
+  netPayable           Decimal  @map("net_payable") @db.Decimal(12, 2)
+  approvalStatus       String   @map("approval_status") @db.VarChar(30) // pending, approved, on_hold
+  paymentStatus        String   @map("payment_status") @db.VarChar(30) // unpaid, processing, paid
+  paymentReference     String?  @map("payment_reference") @db.VarChar(100)
+  warnings             String[] @default([])
+
+  // Relations
+  payrollRun PayrollRun        @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  driver     Driver            @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  lineItems  PayrollLineItem[]
+
+  @@unique([payrollRunId, driverId])
+  @@index([payrollRunId])
+  @@index([driverId])
+  @@index([approvalStatus])
+  @@index([paymentStatus])
+  @@map("payroll_records")
+}
+
+model PayrollLineItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  payrollRecordId    String   @map("payroll_record_id") @db.Uuid
+  name               String   @db.VarChar(150)
+  type               String   @db.VarChar(20) // earning, deduction
+  amount             Decimal  @db.Decimal(12, 2)
+  category           String   @db.VarChar(50) // base, allowance, trip_bata, fuel_deduction, advance_recovery, statutory, other
+  sourceRefId        String?  @map("source_ref_id") @db.Uuid // trip_fuel_deductions.id or driver_advance_transactions.id
+
+  // Relations
+  payrollRecord     PayrollRecord      @relation(fields: [payrollRecordId], references: [id], onDelete: Cascade)
+  fuelDeductionRef  TripFuelDeduction? @relation(fields: [sourceRefId], references: [id], onDelete: SetNull)
+
+  @@index([payrollRecordId])
+  @@index([sourceRefId])
+  @@map("payroll_line_items")
+}
+
+// ========================================================
+// 6. Integration and Audit
+// ========================================================
+
+model IntegrationJob {
+  id             String    @id @default(uuid()) @db.Uuid
+  jobType        String    @map("job_type") @db.VarChar(50) // vehicle_master_sync, odometer_push, tyre_distance_attribution, tyre_lifecycle_sync
+  idempotencyKey String    @unique @map("idempotency_key") @db.VarChar(255)
+  vehicleId      String    @map("vehicle_id") @db.Uuid
+  tripId         String?   @map("trip_id") @db.Uuid
+  status         String    @db.VarChar(30) // pending, success, failed, retry_queued, dead_letter
+  attemptCount   Int       @default(0) @map("attempt_count")
+  maxAttempts    Int       @default(3) @map("max_attempts")
+  payload        Json      @db.JsonB
+  responseBody   Json?     @map("response_body") @db.JsonB
+  errorMessage   String?   @map("error_message") @db.Text
+  nextRetryAt    DateTime? @map("next_retry_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  trip    Trip?   @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([jobType])
+  @@index([vehicleId])
+  @@index([tripId])
+  @@map("integration_jobs")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  entityType    String   @map("entity_type") @db.VarChar(50) // Trip, Driver, Advance, Expense, FuelDeduction, SalaryStructure, Payroll, Odometer
+  entityId      String   @map("entity_id") @db.VarChar(100)
+  entityLabel   String   @map("entity_label") @db.VarChar(255)
+  action        String   @db.VarChar(100)
+  previousValue Json?    @map("previous_value") @db.JsonB
+  newValue      Json?    @map("new_value") @db.JsonB
+  reason        String?  @db.Text
+  changedBy     String   @map("changed_by") @db.VarChar(150)
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  timestamp     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([entityType, entityId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
