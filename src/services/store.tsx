@@ -409,7 +409,9 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           sequence: 1,
           fromLocation: tripData.startingLocation || 'Main Hub',
           toLocation: tripData.finalDestination || 'Destination',
-          distanceKm: odoEval.acceptedDistance
+          distanceKm: odoEval.acceptedDistance,
+          tonnage: vehicle?.tonnage || 20,
+          cargoDescription: 'Standard Rated Payload'
         }
       ],
       startingLocation: tripData.startingLocation || 'Chennai Central Hub',

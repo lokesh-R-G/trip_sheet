@@ -629,6 +629,8 @@ export const initialTrips: Trip[] = [
         departureTime: '2026-10-14 08:30',
         arrivalTime: '2026-10-14 11:45',
         distanceKm: 135,
+        tonnage: 28,
+        cargoDescription: 'OEM Auto Parts (Full Load)',
         notes: 'NH48 smooth transit'
       },
       {
@@ -639,6 +641,8 @@ export const initialTrips: Trip[] = [
         departureTime: '2026-10-14 12:30',
         arrivalTime: '2026-10-14 16:30',
         distanceKm: 215,
+        tonnage: 28,
+        cargoDescription: 'OEM Auto Parts (Unloading)',
         notes: 'Unloading at Bommasandra Industrial Area'
       },
       {
@@ -649,6 +653,8 @@ export const initialTrips: Trip[] = [
         departureTime: '2026-10-15 08:00',
         arrivalTime: '2026-10-15 09:30',
         distanceKm: 40,
+        tonnage: 0,
+        cargoDescription: 'Empty Repositioning',
         notes: 'Return consignment loading'
       },
       {
@@ -659,6 +665,8 @@ export const initialTrips: Trip[] = [
         departureTime: '2026-10-15 10:15',
         arrivalTime: '2026-10-15 18:30',
         distanceKm: 60,
+        tonnage: 18,
+        cargoDescription: 'Return Spares Backhaul',
         notes: 'Final leg to Madhavaram yard'
       }
     ],
@@ -815,7 +823,9 @@ export const initialTrips: Trip[] = [
         toLocation: 'Salem',
         departureTime: '2026-10-16 06:30',
         arrivalTime: '2026-10-16 11:30',
-        distanceKm: 235
+        distanceKm: 235,
+        tonnage: 48,
+        cargoDescription: 'Cold-Rolled Steel Coils (Full 48T Load)'
       },
       {
         id: 'seg-102-2',
@@ -824,7 +834,9 @@ export const initialTrips: Trip[] = [
         toLocation: 'Hyderabad',
         departureTime: '2026-10-16 13:00',
         arrivalTime: '2026-10-18 13:30',
-        distanceKm: 405
+        distanceKm: 405,
+        tonnage: 48,
+        cargoDescription: 'Cold-Rolled Steel Coils'
       }
     ],
 
@@ -939,14 +951,18 @@ export const initialTrips: Trip[] = [
         sequence: 1,
         fromLocation: 'Nelamangala Depot',
         toLocation: 'Mandya Hub',
-        distanceKm: 180
+        distanceKm: 180,
+        tonnage: 16,
+        cargoDescription: 'FMCG Pallet Cargo'
       },
       {
         id: 'seg-103-2',
         sequence: 2,
         fromLocation: 'Mandya Hub',
         toLocation: 'Kadakola Mysuru',
-        distanceKm: 200
+        distanceKm: 200,
+        tonnage: 10,
+        cargoDescription: 'Retail Distribution Replenishment'
       }
     ],
 
@@ -1069,14 +1085,18 @@ export const initialTrips: Trip[] = [
         sequence: 1,
         fromLocation: 'Peenya Quarry',
         toLocation: 'Casting Yard',
-        distanceKm: 60
+        distanceKm: 60,
+        tonnage: 28,
+        cargoDescription: 'Crushed Granite Aggregate'
       },
       {
         id: 'seg-104-2',
         sequence: 2,
         fromLocation: 'Casting Yard',
         toLocation: 'Peenya Quarry',
-        distanceKm: 60
+        distanceKm: 60,
+        tonnage: 0,
+        cargoDescription: 'Unladen Return to Quarry'
       }
     ],
 

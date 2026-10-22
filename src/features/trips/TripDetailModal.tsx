@@ -282,23 +282,100 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
 
         {/* TAB 2: Route Segments */}
         {activeTab === 'route' && (
-          <div className="space-y-2 text-xs">
-            <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white">
-              {trip.routeSegments.map((seg, idx) => (
-                <div key={seg.id} className="p-3 flex items-center justify-between hover:bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0">
-                      {seg.sequence}
+          <div className="space-y-3 text-xs">
+            {/* Aggregate Segment & Payload Analytics */}
+            {(() => {
+              const totalSegDist = trip.routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0), 0);
+              const totalTonneKm = trip.routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0) * (seg.tonnage || 0), 0);
+              const avgTonnage = totalSegDist > 0 ? (totalTonneKm / totalSegDist).toFixed(1) : '0';
+              const maxTonnage = trip.routeSegments.length > 0 ? Math.max(...trip.routeSegments.map(s => s.tonnage || 0)) : 0;
+              const ladenDist = trip.routeSegments.filter(s => (s.tonnage || 0) > 0).reduce((sum, s) => sum + (s.distanceKm || 0), 0);
+              const emptyDist = trip.routeSegments.filter(s => (s.tonnage || 0) === 0).reduce((sum, s) => sum + (s.distanceKm || 0), 0);
+
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 border border-gray-200 rounded-xl p-3.5">
+                  <div>
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase block">Total Route Legs</span>
+                    <span className="text-sm font-bold text-gray-900">{trip.routeSegments.length} Segments</span>
+                    <span className="text-[10px] text-gray-400 block mt-0.5">Sum: {formatKm(totalSegDist)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase block">Weighted Avg Payload</span>
+                    <span className="text-sm font-bold text-emerald-800 font-mono">{avgTonnage} Tonnes</span>
+                    <span className="text-[10px] text-gray-400 block mt-0.5">Peak Leg: {maxTonnage} MT</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase block">Haul Distribution</span>
+                    <div className="text-xs font-semibold text-gray-800 mt-0.5">
+                      <span className="text-emerald-700">{formatKm(ladenDist)} Laden</span>
+                      <span className="text-gray-400 mx-1">•</span>
+                      <span className="text-amber-700">{formatKm(emptyDist)} Empty</span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 block mt-0.5">
+                      {totalSegDist > 0 ? `${Math.round((ladenDist / totalSegDist) * 100)}% laden haul efficiency` : '—'}
                     </span>
-                    <div>
-                      <span className="font-bold text-gray-900">{seg.fromLocation} → {seg.toLocation}</span>
-                      {seg.notes && <span className="text-gray-400 ml-2">({seg.notes})</span>}
-                      <div className="text-[10px] text-gray-400 mt-0.5">
-                        Dep: {seg.departureTime || '—'} • Arr: {seg.arrivalTime || '—'}
-                      </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase block">Freight Haulage Volume</span>
+                    <span className="text-sm font-bold text-gray-900 font-mono">
+                      {Math.round(totalTonneKm).toLocaleString()} T-km
+                    </span>
+                    <span className="text-[10px] text-gray-400 block mt-0.5">Tonne-Kilometre Work Metric</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Individual Segments Breakdown Table/List */}
+            <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
+              <div className="bg-gray-50/75 px-3 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider grid grid-cols-12 gap-2">
+                <span className="col-span-1">Leg</span>
+                <span className="col-span-4">Segment Origin & Destination</span>
+                <span className="col-span-3">Cargo Consignment</span>
+                <span className="col-span-2 text-right">Payload Tonnage</span>
+                <span className="col-span-2 text-right">Distance</span>
+              </div>
+              {trip.routeSegments.map((seg, idx) => (
+                <div key={seg.id} className="p-3 grid grid-cols-12 gap-2 items-center hover:bg-gray-50/70 transition-colors">
+                  <div className="col-span-1 flex items-center">
+                    <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs shrink-0">
+                      {seg.sequence || idx + 1}
+                    </span>
+                  </div>
+                  <div className="col-span-4">
+                    <span className="font-bold text-gray-900 block text-xs">
+                      {seg.fromLocation} → {seg.toLocation}
+                    </span>
+                    <div className="text-[10px] text-gray-400 mt-0.5">
+                      Dep: {seg.departureTime || '—'} • Arr: {seg.arrivalTime || '—'}
+                      {seg.notes && <span className="ml-1 text-gray-500 font-medium">({seg.notes})</span>}
                     </div>
                   </div>
-                  <span className="font-mono font-bold text-gray-900">{formatKm(seg.distanceKm)}</span>
+                  <div className="col-span-3">
+                    <span className="text-xs text-gray-700 block truncate" title={seg.cargoDescription || 'Standard Consignment'}>
+                      {seg.cargoDescription || (seg.tonnage === 0 ? 'Empty Repositioning Leg' : 'Commercial Freight')}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {seg.tonnage === 0 ? 'Unladen run (0T)' : 'Revenue freight load'}
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-right">
+                    {seg.tonnage === 0 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                        0 MT (Empty)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                        {seg.tonnage !== undefined ? `${seg.tonnage} MT` : '—'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="col-span-2 text-right">
+                    <span className="font-mono font-bold text-gray-900 text-xs">{formatKm(seg.distanceKm)}</span>
+                    <span className="block text-[10px] text-gray-400 font-mono">
+                      {seg.tonnage !== undefined ? `${Math.round(seg.distanceKm * seg.tonnage)} T-km` : ''}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

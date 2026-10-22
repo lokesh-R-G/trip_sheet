@@ -81,13 +81,29 @@ export const TripListView: React.FC = () => {
     },
     {
       key: 'route',
-      header: 'Route Corridor',
-      render: t => (
-        <div className="truncate max-w-[200px]" title={`${t.startingLocation} → ${t.finalDestination}`}>
-          <span className="text-gray-800 font-medium block truncate">{t.startingLocation}</span>
-          <span className="text-[10px] text-gray-400 block truncate">↓ {t.finalDestination}</span>
-        </div>
-      )
+      header: 'Route Corridor & Payload',
+      render: t => {
+        const segCount = t.routeSegments.length;
+        const totalDist = t.routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0), 0);
+        const totalTonneKm = t.routeSegments.reduce((s, seg) => s + (seg.distanceKm || 0) * (seg.tonnage || 0), 0);
+        const avgTonnage = totalDist > 0 ? (totalTonneKm / totalDist).toFixed(1) : undefined;
+        return (
+          <div className="truncate max-w-[220px]" title={`${t.startingLocation} → ${t.finalDestination}`}>
+            <span className="text-gray-800 font-medium block truncate">{t.startingLocation}</span>
+            <span className="text-[10px] text-gray-400 block truncate">↓ {t.finalDestination}</span>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                {segCount} {segCount === 1 ? 'leg' : 'legs'}
+              </span>
+              {avgTonnage !== undefined && (
+                <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono">
+                  {avgTonnage}T payload
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      }
     },
     {
       key: 'odometerReadings',
