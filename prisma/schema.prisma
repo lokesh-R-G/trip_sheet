@@ -129,46 +129,54 @@ model Vehicle {
 }
 
 model FuelTopUp {
-  id               String   @id @default(uuid()) @db.Uuid
-  vehicleId        String   @map("vehicle_id") @db.Uuid
-  dateTime         DateTime @map("date_time") @db.Timestamptz(6)
-  litres           Decimal  @db.Decimal(10, 2)
-  pricePerLitre    Decimal  @map("price_per_litre") @db.Decimal(10, 2)
-  totalCost        Decimal  @map("total_cost") @db.Decimal(12, 2)
-  fuelStation      String   @map("fuel_station") @db.VarChar(255)
-  odometerReading  Int?     @map("odometer_reading")
-  paymentMethod    String   @map("payment_method") @db.VarChar(50)
-  receiptReference String   @map("receipt_reference") @db.VarChar(100)
-  recordedBy       String   @map("recorded_by") @db.VarChar(100)
-  notes            String?  @db.Text
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                        String              @id @default(uuid()) @db.Uuid
+  vehicleId                 String              @map("vehicle_id") @db.Uuid
+  dateTime                  DateTime            @map("date_time") @db.Timestamptz(6)
+  litres                    Decimal             @db.Decimal(10, 2)
+  dispensedLitres           Decimal?            @map("dispensed_litres") @db.Decimal(10, 2)
+  fuelType                  String              @default("diesel") @map("fuel_type") @db.VarChar(50)
+  pricePerLitre             Decimal             @map("price_per_litre") @db.Decimal(10, 2)
+  totalCost                 Decimal             @map("total_cost") @db.Decimal(12, 2)
+  fuelStation               String              @map("fuel_station") @db.VarChar(255)
+  pumpMeterStart            Decimal?            @map("pump_meter_start") @db.Decimal(10, 2)
+  pumpMeterEnd              Decimal?            @map("pump_meter_end") @db.Decimal(10, 2)
+  odometerReading           Int?                @map("odometer_reading")
+  odometerObservationStatus String              @default("observation") @map("odometer_observation_status") @db.VarChar(30) // observation, validated, rejected
+  paymentMethod             String              @map("payment_method") @db.VarChar(50)
+  receiptReference          String              @map("receipt_reference") @db.VarChar(100)
+  recordedBy                String              @map("recorded_by") @db.VarChar(100)
+  notes                     String?             @db.Text
+  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicle                   Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  tripFuelAdditions         TripFuelAddition[]
 
   @@index([vehicleId, dateTime])
   @@map("fuel_top_ups")
 }
 
 model MileageBenchmark {
-  id                        String    @id @default(uuid()) @db.Uuid
-  name                      String    @db.VarChar(150)
-  vehicleId                 String?   @map("vehicle_id") @db.Uuid
-  vehicleType               String?   @map("vehicle_type") @db.VarChar(50)
-  minTonnage                Decimal?  @map("min_tonnage") @db.Decimal(6, 2)
-  maxTonnage                Decimal?  @map("max_tonnage") @db.Decimal(6, 2)
-  expectedMileageKmPerLitre Decimal   @map("expected_mileage_km_per_litre") @db.Decimal(6, 2)
-  permittedTolerancePercent Decimal   @map("permitted_tolerance_percent") @db.Decimal(5, 2)
-  effectiveFrom             DateTime  @map("effective_from") @db.Date
-  effectiveTo               DateTime? @map("effective_to") @db.Date
-  status                    String    @db.VarChar(20) // active, inactive
-  priority                  Int       @default(1)
-  notes                     String?   @db.Text
-  createdAt                 DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                        String              @id @default(uuid()) @db.Uuid
+  name                      String              @db.VarChar(150)
+  vehicleId                 String?             @map("vehicle_id") @db.Uuid
+  vehicleType               String?             @map("vehicle_type") @db.VarChar(50)
+  minTonnage                Decimal?            @map("min_tonnage") @db.Decimal(6, 2)
+  maxTonnage                Decimal?            @map("max_tonnage") @db.Decimal(6, 2)
+  terrain                   String?             @db.VarChar(50) // plain, hilly, mixed
+  routeCategory             String?             @map("route_category") @db.VarChar(50) // highway, city, rural, mixed
+  expectedMileageKmPerLitre Decimal             @map("expected_mileage_km_per_litre") @db.Decimal(6, 2)
+  permittedTolerancePercent Decimal             @default(0) @map("permitted_tolerance_percent") @db.Decimal(5, 2)
+  effectiveFrom             DateTime            @map("effective_from") @db.Date
+  effectiveTo               DateTime?           @map("effective_to") @db.Date
+  status                    String              @db.VarChar(20) // active, inactive
+  priority                  Int                 @default(1)
+  notes                     String?             @db.Text
+  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  vehicle        Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  fuelDeductions TripFuelDeduction[]
+  vehicle                   Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  fuelDeductions            TripFuelDeduction[]
 
   @@index([vehicleId])
   @@index([vehicleType])
@@ -222,8 +230,10 @@ model TripRouteSegment {
   toLocation    String    @map("to_location") @db.VarChar(255)
   departureTime DateTime? @map("departure_time") @db.Timestamptz(6)
   arrivalTime   DateTime? @map("arrival_time") @db.Timestamptz(6)
-  distanceKm    Decimal   @map("distance_km") @db.Decimal(10, 2)
-  notes         String?   @db.Text
+  distanceKm       Decimal   @map("distance_km") @db.Decimal(10, 2)
+  tonnage          Decimal?  @db.Decimal(6, 2)
+  cargoDescription String?   @map("cargo_description") @db.VarChar(255)
+  notes            String?   @db.Text
 
   // Relations
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
@@ -262,23 +272,48 @@ model TripOdometerRecord {
 }
 
 model TripFuelRecord {
-  id                     String   @id @default(uuid()) @db.Uuid
-  tripId                 String   @unique @map("trip_id") @db.Uuid
-  openingFuelQuantity    Decimal? @map("opening_fuel_quantity") @db.Decimal(10, 2)
-  fuelAddedDuringTrip    Decimal? @map("fuel_added_during_trip") @db.Decimal(10, 2)
-  closingFuelQuantity    Decimal? @map("closing_fuel_quantity") @db.Decimal(10, 2)
-  calculatedConsumption  Decimal? @map("calculated_consumption") @db.Decimal(10, 2)
-  manuallyReportedLitres Decimal? @map("manually_reported_litres") @db.Decimal(10, 2)
-  acceptedFuelLitres     Decimal  @map("accepted_fuel_litres") @db.Decimal(10, 2)
-  measurementMethod      String   @map("measurement_method") @db.VarChar(40) // calculated_balance, manual_slip, fuel_sensor
-  calculationStatus      String   @map("calculation_status") @db.VarChar(30) // verified, discrepancy, provisional
-  tripMileageKmPerLitre  Decimal? @map("trip_mileage_km_per_litre") @db.Decimal(8, 2)
-  mileageStatus          String   @map("mileage_status") @db.VarChar(30) // valid, pending_verification, unavailable
+  id                     String             @id @default(uuid()) @db.Uuid
+  tripId                 String             @unique @map("trip_id") @db.Uuid
+  openingFuelQuantity    Decimal?           @map("opening_fuel_quantity") @db.Decimal(10, 2)
+  fuelAddedDuringTrip    Decimal?           @map("fuel_added_during_trip") @db.Decimal(10, 2)
+  closingFuelQuantity    Decimal?           @map("closing_fuel_quantity") @db.Decimal(10, 2)
+  calculatedConsumption  Decimal?           @map("calculated_consumption") @db.Decimal(10, 2)
+  manuallyReportedLitres Decimal?           @map("manually_reported_litres") @db.Decimal(10, 2)
+  acceptedFuelLitres     Decimal            @map("accepted_fuel_litres") @db.Decimal(10, 2)
+  measurementMethod      String             @map("measurement_method") @db.VarChar(40) // calculated_balance, manual_slip, fuel_sensor
+  calculationStatus      String             @map("calculation_status") @db.VarChar(30) // verified, discrepancy, provisional, missing_inputs
+  calculationVersion     Int                @default(1) @map("calculation_version")
+  discrepancyFlag        Boolean            @default(false) @map("discrepancy_flag")
+  discrepancyDetails     String?            @map("discrepancy_details") @db.Text
+  tripMileageKmPerLitre  Decimal?           @map("trip_mileage_km_per_litre") @db.Decimal(8, 2)
+  mileageStatus          String             @map("mileage_status") @db.VarChar(30) // valid, pending_verification, unavailable, disputed
 
   // Relations
-  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip                   Trip               @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  additions              TripFuelAddition[]
 
   @@map("trip_fuel_records")
+}
+
+model TripFuelAddition {
+  id               String         @id @default(uuid()) @db.Uuid
+  tripFuelRecordId String         @map("trip_fuel_record_id") @db.Uuid
+  fuelTopUpId      String?        @map("fuel_top_up_id") @db.Uuid
+  litres           Decimal        @db.Decimal(10, 2)
+  source           String         @db.VarChar(50) // bunkering, fuel_station, top_up, manual_slip
+  receiptReference String?        @map("receipt_reference") @db.VarChar(100)
+  additionDateTime DateTime       @map("addition_date_time") @db.Timestamptz(6)
+  verified         Boolean        @default(false)
+  notes            String?        @db.Text
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  tripFuelRecord   TripFuelRecord @relation(fields: [tripFuelRecordId], references: [id], onDelete: Cascade)
+  fuelTopUp        FuelTopUp?     @relation(fields: [fuelTopUpId], references: [id], onDelete: SetNull)
+
+  @@index([tripFuelRecordId])
+  @@index([fuelTopUpId])
+  @@map("trip_fuel_additions")
 }
 
 model TripExpense {
@@ -383,25 +418,44 @@ model TripFuelDeduction {
   expectedFuelLitres       Decimal           @map("expected_fuel_litres") @db.Decimal(10, 2)
   allowedFuelLitres        Decimal           @map("allowed_fuel_litres") @db.Decimal(10, 2)
   excessFuelLitres         Decimal           @map("excess_fuel_litres") @db.Decimal(10, 2)
-  applicableFuelPrice      Decimal           @map("applicable_fuel_price") @db.Decimal(10, 2)
-  potentialDeductionAmount Decimal           @map("potential_deduction_amount") @db.Decimal(12, 2)
+  applicableFuelPrice      Decimal?          @map("applicable_fuel_price") @db.Decimal(10, 2)
+  potentialDeductionAmount Decimal?          @map("potential_deduction_amount") @db.Decimal(12, 2)
   approvedDeductionAmount  Decimal           @default(0) @map("approved_deduction_amount") @db.Decimal(12, 2)
-  reviewStatus             String            @map("review_status") @db.VarChar(40) // pending_review, approved, rejected, adjusted, posted_to_payroll, recovered_through_payroll
+  reviewStatus             String            @map("review_status") @db.VarChar(40) // pending_review, pending_valuation, approved, rejected, adjusted, returned_for_correction, posted_to_payroll, recovered_through_payroll
   adjustmentReason         String?           @map("adjustment_reason") @db.Text
   adjustedBy               String?           @map("adjusted_by") @db.VarChar(100)
+  reviewedBy               String?           @map("reviewed_by") @db.VarChar(100)
+  reviewedAt               DateTime?         @map("reviewed_at") @db.Timestamptz(6)
   payrollMonth             String?           @map("payroll_month") @db.VarChar(7) // YYYY-MM
+  version                  Int               @default(1)
   createdAt                DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  trip             Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  benchmark        MileageBenchmark? @relation(fields: [benchmarkId], references: [id], onDelete: SetNull)
-  payrollLineItems PayrollLineItem[]
+  trip                     Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  benchmark                MileageBenchmark? @relation(fields: [benchmarkId], references: [id], onDelete: SetNull)
+  payrollLineItems         PayrollLineItem[]
 
   @@index([benchmarkId])
   @@index([reviewStatus])
   @@index([payrollMonth])
   @@map("trip_fuel_deductions")
+}
+
+model FuelValuationPolicy {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String    @db.VarChar(100)
+  fuelType      String    @default("diesel") @map("fuel_type") @db.VarChar(50)
+  pricePerLitre Decimal   @map("price_per_litre") @db.Decimal(10, 2)
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  status        String    @default("active") @db.VarChar(20) // active, inactive
+  approvedBy    String?   @map("approved_by") @db.VarChar(100)
+  notes         String?   @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([fuelType, effectiveFrom])
+  @@map("fuel_valuation_policies")
 }
 
 // ========================================================
