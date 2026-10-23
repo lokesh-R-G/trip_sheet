@@ -151,6 +151,7 @@ model FuelTopUp {
   // Relations
   vehicle                   Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   tripFuelAdditions         TripFuelAddition[]
+  expenses                  TripExpense[]
 
   @@index([vehicleId, dateTime])
   @@map("fuel_top_ups")
@@ -214,6 +215,7 @@ model Trip {
   settlementRecord    TripSettlementRecord?
   fuelDeduction       TripFuelDeduction?
   advanceTransactions DriverAdvanceTransaction[]
+  advanceAllocations  AdvanceSettlementAllocation[]
   integrationJobs     IntegrationJob[]
 
   @@index([driverId])
@@ -317,28 +319,35 @@ model TripFuelAddition {
 }
 
 model TripExpense {
-  id               String    @id @default(uuid()) @db.Uuid
-  tripId           String    @map("trip_id") @db.Uuid
-  category         String    @db.VarChar(50) // Refreshments, RTO Charges, Tolls, Parking, Loading & Unloading, Repairs, Other Operational
-  description      String    @db.Text
-  amount           Decimal   @db.Decimal(12, 2)
-  expenseDate      DateTime  @map("expense_date") @db.Date
-  paymentMethod    String    @map("payment_method") @db.VarChar(50)
-  receiptReference String?   @map("receipt_reference") @db.VarChar(100)
-  submittedBy      String    @map("submitted_by") @db.VarChar(100)
-  approvalStatus   String    @map("approval_status") @db.VarChar(20) // pending, approved, rejected
-  approvedAmount   Decimal?  @map("approved_amount") @db.Decimal(12, 2)
-  reviewer         String?   @db.VarChar(100)
-  reviewNotes      String?   @map("review_notes") @db.Text
-  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                   String                         @id @default(uuid()) @db.Uuid
+  tripId               String                         @map("trip_id") @db.Uuid
+  driverId             String?                        @map("driver_id") @db.Uuid
+  category             String                         @db.VarChar(50) // Refreshments, RTO Charges, Tolls, Parking, Loading & Unloading, Repairs, Permits, Other Operational
+  description          String                         @db.Text
+  amount               Decimal                        @db.Decimal(12, 2)
+  expenseDate          DateTime                       @map("expense_date") @db.Date
+  paymentMethod        String                         @map("payment_method") @db.VarChar(50)
+  vendorName           String?                        @map("vendor_name") @db.VarChar(150)
+  receiptReference     String?                        @map("receipt_reference") @db.VarChar(100)
+  fuelTopUpId          String?                        @map("fuel_top_up_id") @db.Uuid
+  isSettlementEligible Boolean                        @default(true) @map("is_settlement_eligible")
+  submittedBy          String                         @map("submitted_by") @db.VarChar(100)
+  approvalStatus       String                         @map("approval_status") @db.VarChar(30) // pending, approved, rejected, returned_for_correction
+  approvedAmount       Decimal?                       @map("approved_amount") @db.Decimal(12, 2)
+  reviewer             String?                        @db.VarChar(100)
+  reviewNotes          String?                        @map("review_notes") @db.Text
+  rejectionReason      String?                        @map("rejection_reason") @db.Text
+  reviewedAt           DateTime?                      @map("reviewed_at") @db.Timestamptz(6)
+  createdAt            DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  trip                 Trip                          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip                  Trip                           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  fuelTopUp             FuelTopUp?                     @relation(fields: [fuelTopUpId], references: [id], onDelete: SetNull)
   settlementAllocations AdvanceSettlementAllocation[]
 
   @@index([tripId])
   @@index([approvalStatus])
+  @@index([fuelTopUpId])
   @@map("trip_expenses")
 }
 
@@ -347,43 +356,56 @@ model TripExpense {
 // ========================================================
 
 model DriverAdvanceTransaction {
-  id              String   @id @default(uuid()) @db.Uuid
-  driverId        String   @map("driver_id") @db.Uuid
-  tripId          String?  @map("trip_id") @db.Uuid
-  referenceNumber String   @unique @map("reference_number") @db.VarChar(100)
-  transactionDate DateTime @map("transaction_date") @db.Date
-  transactionType String   @map("transaction_type") @db.VarChar(40) // advance_issued, cash_return, expense_settlement_credit, payroll_recovery_credit, write_off
-  advanceType     String   @map("advance_type") @db.VarChar(40) // trip_advance, operational_advance, other_approved
-  debitAmount     Decimal  @default(0) @map("debit_amount") @db.Decimal(12, 2)
-  creditAmount    Decimal  @default(0) @map("credit_amount") @db.Decimal(12, 2)
-  paymentMethod   String   @map("payment_method") @db.VarChar(50)
-  notes           String?  @db.Text
-  createdBy       String   @map("created_by") @db.VarChar(100)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id              String                         @id @default(uuid()) @db.Uuid
+  driverId        String                         @map("driver_id") @db.Uuid
+  tripId          String?                        @map("trip_id") @db.Uuid
+  referenceNumber String                         @unique @map("reference_number") @db.VarChar(100)
+  transactionDate DateTime                       @map("transaction_date") @db.Date
+  transactionType String                         @map("transaction_type") @db.VarChar(40) // advance_issued, cash_return, expense_settlement_credit, payroll_recovery_credit, write_off, reversal, correction
+  advanceType     String                         @map("advance_type") @db.VarChar(40) // trip_advance, operational_advance, other_approved, fuel_card_advance, toll_advance
+  debitAmount     Decimal                        @default(0) @map("debit_amount") @db.Decimal(12, 2)
+  creditAmount    Decimal                        @default(0) @map("credit_amount") @db.Decimal(12, 2)
+  currency        String                         @default("INR") @db.VarChar(10)
+  status          String                         @default("active") @db.VarChar(30) // active, cancelled, reversed
+  paymentMethod   String                         @map("payment_method") @db.VarChar(50)
+  reversalOfId    String?                        @map("reversal_of_id") @db.Uuid
+  notes           String?                        @db.Text
+  createdBy       String                         @map("created_by") @db.VarChar(100)
+  createdAt       DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  driver                Driver                        @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  trip                  Trip?                         @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  driver                Driver                         @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  trip                  Trip?                          @relation(fields: [tripId], references: [id], onDelete: SetNull)
   settlementAllocations AdvanceSettlementAllocation[]
+  reversalOf            DriverAdvanceTransaction?      @relation("AdvanceReversals", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversals             DriverAdvanceTransaction[]     @relation("AdvanceReversals")
 
   @@index([driverId, transactionDate])
   @@index([tripId])
   @@index([transactionType])
+  @@index([reversalOfId])
   @@map("driver_advance_transactions")
 }
 
 model AdvanceSettlementAllocation {
-  id                  String   @id @default(uuid()) @db.Uuid
-  advanceTransactionId String  @map("advance_transaction_id") @db.Uuid
-  tripExpenseId       String   @map("trip_expense_id") @db.Uuid
-  allocatedAmount     Decimal  @map("allocated_amount") @db.Decimal(12, 2)
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                   String                   @id @default(uuid()) @db.Uuid
+  advanceTransactionId String                   @map("advance_transaction_id") @db.Uuid
+  tripId               String                   @map("trip_id") @db.Uuid
+  tripExpenseId        String?                  @map("trip_expense_id") @db.Uuid
+  allocatedAmount      Decimal                  @map("allocated_amount") @db.Decimal(12, 2)
+  status               String                   @default("active") @db.VarChar(30) // active, released, reversed
+  releaseReason        String?                  @map("release_reason") @db.Text
+  releasedBy           String?                  @map("released_by") @db.VarChar(100)
+  releasedAt           DateTime?                @map("released_at") @db.Timestamptz(6)
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
-  advanceTransaction DriverAdvanceTransaction @relation(fields: [advanceTransactionId], references: [id], onDelete: Cascade)
-  tripExpense        TripExpense              @relation(fields: [tripExpenseId], references: [id], onDelete: Cascade)
+  advanceTransaction   DriverAdvanceTransaction @relation(fields: [advanceTransactionId], references: [id], onDelete: Cascade)
+  trip                 Trip                     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripExpense          TripExpense?             @relation(fields: [tripExpenseId], references: [id], onDelete: SetNull)
 
   @@index([advanceTransactionId])
+  @@index([tripId])
   @@index([tripExpenseId])
   @@map("advance_settlement_allocations")
 }
@@ -392,11 +414,26 @@ model TripSettlementRecord {
   id                              String    @id @default(uuid()) @db.Uuid
   tripId                          String    @unique @map("trip_id") @db.Uuid
   totalAdvancesIssued             Decimal   @default(0) @map("total_advances_issued") @db.Decimal(12, 2)
+  totalAdvancesAllocated          Decimal   @default(0) @map("total_advances_allocated") @db.Decimal(12, 2)
   totalApprovedExpenses           Decimal   @default(0) @map("total_approved_expenses") @db.Decimal(12, 2)
   amountReturnedByDriver          Decimal   @default(0) @map("amount_returned_by_driver") @db.Decimal(12, 2)
+  totalReturnedAmount             Decimal   @default(0) @map("total_returned_amount") @db.Decimal(12, 2)
   otherValidCredits               Decimal   @default(0) @map("other_valid_credits") @db.Decimal(12, 2)
-  outstandingBalance              Decimal   @map("outstanding_balance") @db.Decimal(12, 2)
+  outstandingBalance              Decimal   @default(0) @map("outstanding_balance") @db.Decimal(12, 2)
+  netBalance                      Decimal   @default(0) @map("net_balance") @db.Decimal(12, 2)
+  reimbursementDue                Decimal   @default(0) @map("reimbursement_due") @db.Decimal(12, 2)
+  driverRecoveryDue               Decimal   @default(0) @map("driver_recovery_due") @db.Decimal(12, 2)
+  calculationVersion              Int       @default(1) @map("calculation_version")
   status                          String    @db.VarChar(30) // pending, partially_settled, fully_settled, requires_review
+  isFinalized                     Boolean   @default(false) @map("is_finalized")
+  finalizedAt                     DateTime? @map("finalized_at") @db.Timestamptz(6)
+  finalizedBy                     String?   @map("finalized_by") @db.VarChar(100)
+  postingStatus                   String    @default("not_posted") @map("posting_status") @db.VarChar(30) // not_posted, pending_approval, posted, posting_failed
+  financialPostingRef             String?   @map("financial_posting_ref") @db.VarChar(100)
+  reopenedAt                      DateTime? @map("reopened_at") @db.Timestamptz(6)
+  reopenedBy                      String?   @map("reopened_by") @db.VarChar(100)
+  reopenReason                    String?   @map("reopen_reason") @db.Text
+  snapshot                        Json?     @db.JsonB
   authorizedPayrollRecoveryAmount Decimal   @default(0) @map("authorized_payroll_recovery_amount") @db.Decimal(12, 2)
   settledDate                     DateTime? @map("settled_date") @db.Date
   createdAt                       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -406,6 +443,7 @@ model TripSettlementRecord {
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   @@index([status])
+  @@index([isFinalized])
   @@map("trip_settlement_records")
 }
 

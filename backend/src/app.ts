@@ -6,6 +6,10 @@ import { fuelTopUpRouter } from './modules/fuel/topups/fuel-topup.routes.js';
 import { benchmarkRouter } from './modules/fuel/benchmarks/benchmark.routes.js';
 import { fuelValuationRouter } from './modules/fuel/valuation/fuel-valuation.routes.js';
 import { fuelDeductionRouter } from './modules/fuel/deductions/fuel-deduction.routes.js';
+import { advanceRouter } from './modules/advances/advance.routes.js';
+import { expenseRouter } from './modules/expenses/expense.routes.js';
+import { settlementRouter } from './modules/settlement/settlement.routes.js';
+import { bataPolicyService } from './modules/bata/bata-policy.service.js';
 import { AppError } from './shared/errors/index.js';
 import { prisma } from './shared/database/prisma.js';
 
@@ -53,6 +57,16 @@ app.use('/api/v1/fuel-topups', fuelTopUpRouter);
 app.use('/api/v1/benchmarks', benchmarkRouter);
 app.use('/api/v1/fuel-policies', fuelValuationRouter);
 app.use('/api/v1/fuel-deductions', fuelDeductionRouter);
+app.use('/api/v1/advances', advanceRouter);
+app.use('/api/v1/expenses', expenseRouter);
+app.use('/api/v1/settlements', settlementRouter);
+
+app.get('/api/v1/bata/status', (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    data: bataPolicyService.getPolicyStatus(),
+  });
+});
 
 // 404 handler
 app.use((req: Request, res: Response) => {
