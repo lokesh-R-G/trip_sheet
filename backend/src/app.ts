@@ -2,6 +2,10 @@ import express, { Request, Response, NextFunction } from 'express';
 import { driverRouter } from './modules/drivers/driver.routes.js';
 import { tripRouter } from './modules/trips/trip.routes.js';
 import { auditRouter } from './modules/audit/audit.routes.js';
+import { fuelTopUpRouter } from './modules/fuel/topups/fuel-topup.routes.js';
+import { benchmarkRouter } from './modules/fuel/benchmarks/benchmark.routes.js';
+import { fuelValuationRouter } from './modules/fuel/valuation/fuel-valuation.routes.js';
+import { fuelDeductionRouter } from './modules/fuel/deductions/fuel-deduction.routes.js';
 import { AppError } from './shared/errors/index.js';
 import { prisma } from './shared/database/prisma.js';
 
@@ -45,6 +49,10 @@ app.get('/api/v1/health', async (_req: Request, res: Response) => {
 app.use('/api/v1/drivers', driverRouter);
 app.use('/api/v1/trips', tripRouter);
 app.use('/api/v1/audit-logs', auditRouter);
+app.use('/api/v1/fuel-topups', fuelTopUpRouter);
+app.use('/api/v1/benchmarks', benchmarkRouter);
+app.use('/api/v1/fuel-policies', fuelValuationRouter);
+app.use('/api/v1/fuel-deductions', fuelDeductionRouter);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

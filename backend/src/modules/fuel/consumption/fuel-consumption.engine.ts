@@ -1,19 +1,19 @@
-import { DecimalValue, dec } from '../../../shared/decimal/index.js';
+import { DecimalValue, dec, DecimalInput } from '../../../shared/decimal/index.js';
 import { DomainValidationError } from '../../../shared/errors/index.js';
 
 export interface FuelAdditionItem {
   id?: string;
-  litres: string | number | DecimalValue;
+  litres: DecimalInput;
   verified: boolean;
   source?: string;
   receiptReference?: string | null;
 }
 
 export interface FuelConsumptionCalculationInput {
-  openingFuelQuantity?: string | number | DecimalValue | null;
-  closingFuelQuantity?: string | number | DecimalValue | null;
+  openingFuelQuantity?: DecimalInput | null;
+  closingFuelQuantity?: DecimalInput | null;
   additions?: FuelAdditionItem[];
-  manuallyReportedLitres?: string | number | DecimalValue | null;
+  manuallyReportedLitres?: DecimalInput | null;
   measurementMethod?: 'calculated_balance' | 'manual_slip' | 'fuel_sensor';
 }
 

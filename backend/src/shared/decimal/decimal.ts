@@ -1,4 +1,5 @@
 import { Decimal } from 'decimal.js';
+import { Prisma } from '@prisma/client';
 
 export class DecimalError extends Error {
   constructor(message: string) {
@@ -134,14 +135,26 @@ export class DecimalValue {
     return new DecimalValue(this._d.plus(o._d));
   }
 
+  public plus(other: DecimalInput): DecimalValue {
+    return this.add(other);
+  }
+
   public sub(other: DecimalInput): DecimalValue {
     const o = DecimalValue.from(other);
     return new DecimalValue(this._d.minus(o._d));
   }
 
+  public minus(other: DecimalInput): DecimalValue {
+    return this.sub(other);
+  }
+
   public mul(other: DecimalInput): DecimalValue {
     const o = DecimalValue.from(other);
     return new DecimalValue(this._d.times(o._d));
+  }
+
+  public times(other: DecimalInput): DecimalValue {
+    return this.mul(other);
   }
 
   public div(other: DecimalInput): DecimalValue {
@@ -223,6 +236,10 @@ export class DecimalValue {
     return this._d.greaterThanOrEqualTo(o._d);
   }
 
+  public greaterThanOrEqualTo(other: DecimalInput): boolean {
+    return this.greaterThanOrEqual(other);
+  }
+
   public lessThan(other: DecimalInput): boolean {
     const o = DecimalValue.from(other);
     return this._d.lessThan(o._d);
@@ -231,6 +248,10 @@ export class DecimalValue {
   public lessThanOrEqual(other: DecimalInput): boolean {
     const o = DecimalValue.from(other);
     return this._d.lessThanOrEqualTo(o._d);
+  }
+
+  public lessThanOrEqualTo(other: DecimalInput): boolean {
+    return this.lessThanOrEqual(other);
   }
 
   public isZero(): boolean {
@@ -270,6 +291,13 @@ export class DecimalValue {
    */
   public toJSON(): string {
     return this._d.toString();
+  }
+
+  /**
+   * Converts to Prisma Decimal instance for database writes.
+   */
+  public toPrismaDecimal(): Prisma.Decimal {
+    return new Prisma.Decimal(this._d.toString());
   }
 }
 

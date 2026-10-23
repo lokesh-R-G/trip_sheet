@@ -9,6 +9,8 @@ import {
   listTripsQuerySchema,
 } from './dto/trip.dto.js';
 import { routeSegmentRouter } from './routes/route-segment.routes.js';
+import { tripFuelRecordController } from '../fuel/consumption/trip-fuel-record.controller.js';
+import { SaveTripFuelRecordSchema, AddTripFuelAdditionSchema } from '../fuel/consumption/trip-fuel-record.dto.js';
 import { z } from 'zod';
 import { zUuid } from '../../shared/validation/custom-types.js';
 
@@ -62,5 +64,23 @@ router.get(
 
 // Mount nested route segment routes
 router.use('/:tripId/segments', routeSegmentRouter);
+
+// Mount nested trip fuel routes
+router.get('/:tripId/fuel', tripFuelRecordController.getByTripId);
+router.post(
+  '/:tripId/fuel',
+  validate({ body: SaveTripFuelRecordSchema }),
+  tripFuelRecordController.save
+);
+router.put(
+  '/:tripId/fuel',
+  validate({ body: SaveTripFuelRecordSchema }),
+  tripFuelRecordController.save
+);
+router.post(
+  '/:tripId/fuel/additions',
+  validate({ body: AddTripFuelAdditionSchema }),
+  tripFuelRecordController.addAddition
+);
 
 export const tripRouter = router;

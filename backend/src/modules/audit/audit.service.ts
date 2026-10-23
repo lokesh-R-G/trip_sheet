@@ -9,6 +9,10 @@ export class AuditService {
     return this.repo.create(data, tx);
   }
 
+  public async log(data: CreateAuditLogData, tx?: PrismaTransactionClient): Promise<AuditLog> {
+    return this.logEvent(data, tx);
+  }
+
   public async getAuditLogs(filters: AuditLogFilters): Promise<{ logs: AuditLog[]; total: number }> {
     return this.repo.findMany(filters);
   }
