@@ -198,6 +198,7 @@ export interface Trip {
   purpose: string;
   notes?: string;
   status: TripStatus;
+  version?: number;
 
   // Section B: Odometer & Distance
   odometer: {

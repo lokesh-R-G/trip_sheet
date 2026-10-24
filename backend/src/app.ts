@@ -9,6 +9,7 @@ import { fuelDeductionRouter } from './modules/fuel/deductions/fuel-deduction.ro
 import { advanceRouter } from './modules/advances/advance.routes.js';
 import { expenseRouter } from './modules/expenses/expense.routes.js';
 import { settlementRouter } from './modules/settlement/settlement.routes.js';
+import { vehicleRouter } from './modules/vehicles/vehicle.routes.js';
 import { bataPolicyService } from './modules/bata/bata-policy.service.js';
 import { AppError } from './shared/errors/index.js';
 import { prisma } from './shared/database/prisma.js';
@@ -51,6 +52,7 @@ app.get('/api/v1/health', async (_req: Request, res: Response) => {
 
 // Mount domain routes
 app.use('/api/v1/drivers', driverRouter);
+app.use('/api/v1/vehicles', vehicleRouter);
 app.use('/api/v1/trips', tripRouter);
 app.use('/api/v1/audit-logs', auditRouter);
 app.use('/api/v1/fuel-topups', fuelTopUpRouter);

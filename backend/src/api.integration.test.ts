@@ -195,7 +195,9 @@ describe('Phase 1 E2E API Integration Tests (BE-01 to BE-10)', () => {
           ],
         });
 
-      console.log('ODOMETER RESULT:', res.body.data.odometer);
+      if (res.status !== 201) {
+        console.error('TRIP CREATION FAILED:', res.status, JSON.stringify(res.body, null, 2));
+      }
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data.status).toBe('draft');

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { tripApi, driverApi, vehicleApi, advanceApi, expenseApi, fuelApi, auditApi } from './api';
 import {
   Driver,
   Vehicle,
@@ -86,7 +87,14 @@ interface FleetStoreContextType {
   syncVehicleMaster: (vehicleId: string) => void;
   triggerTLCMTyreAttribution: (tripId: string) => { success: boolean; message: string };
 
-  // System
+  // System & API Sync
+  vehiclesLoading: boolean;
+  vehiclesError: string | null;
+  refreshTrips: () => Promise<void>;
+  refreshAdvances: () => Promise<void>;
+  refreshExpenses: () => Promise<void>;
+  refreshDrivers: () => Promise<void>;
+  refreshVehicles: () => Promise<void>;
   resetAllData: () => void;
 }
 
@@ -106,7 +114,10 @@ function getStoredOr<T>(key: string, fallback: T): T {
 
 export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<SystemSettings>(() => getStoredOr('settings', initialSettings));
-  const [vehicles, setVehicles] = useState<Vehicle[]>(() => getStoredOr('vehicles', initialVehicles));
+  // Authoritative vehicles strictly loaded from TLCM database via backend API
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState<boolean>(true);
+  const [vehiclesError, setVehiclesError] = useState<string | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOr('drivers', initialDrivers));
   const [salaryStructures, setSalaryStructures] = useState<SalaryStructure[]>(() => getStoredOr('salaryStructures', initialSalaryStructures));
   const [advances, setAdvances] = useState<DriverAdvance[]>(() => getStoredOr('advances', initialAdvances));
@@ -151,6 +162,263 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PREFIX + 'auditLogs', JSON.stringify(auditLogs));
   }, [auditLogs]);
+
+  // --- Real Backend Data Mappers ---
+  const mapBackendDriver = (d: any): Driver => ({
+    id: d.id,
+    driverNumber: d.driverNumber,
+    fullName: d.fullName,
+    phone: d.phone,
+    email: d.email || undefined,
+    address: d.address,
+    joiningDate: d.joiningDate ? d.joiningDate.split('T')[0] : '',
+    licenseNumber: d.licenseNumber,
+    licenseExpiry: d.licenseExpiry ? d.licenseExpiry.split('T')[0] : '',
+    status: (d.status || 'active') as any,
+    currentVehicleId: d.currentVehicleId || undefined,
+    assignedVehicleReg: d.currentVehicle?.registrationNumber || undefined,
+    outstandingAdvance: Number(d.outstandingAdvance || 0),
+    notes: d.notes || undefined,
+    createdAt: d.createdAt || new Date().toISOString(),
+  });
+
+  const mapBackendVehicle = (v: any): Vehicle => ({
+    id: v.id,
+    tlcmVehicleId: v.tlcmVehicleId,
+    registrationNumber: v.registrationNumber,
+    vehicleType: v.vehicleType || 'Heavy Truck',
+    makeModel: v.makeModel,
+    tonnage: Number(v.tonnage || 0),
+    status: (v.status ? v.status.charAt(0).toUpperCase() + v.status.slice(1) : 'Active') as any,
+    latestOdometer: Number(v.latestOdometer || 0),
+    totalTripDistance: Number(v.totalTripDistance || 0),
+    assignedTyresCount: Number(v.assignedTyresCount || 10),
+    hasStepneyFitted: Boolean(v.hasStepneyFitted),
+    syncStatus: (v.syncStatus || 'connected') as any,
+    lastSyncTime: v.lastSyncTime || new Date().toISOString(),
+  });
+
+  const mapBackendTrip = (t: any): Trip => {
+    const odo = t.odometerRecord || {};
+    const fuel = t.fuelRecord || {};
+    const sett = t.settlementRecord || {};
+    const fded = t.fuelDeduction || {};
+
+    const routeSegments = (t.routeSegments || []).map((s: any, idx: number) => ({
+      id: s.id,
+      sequence: s.sequence || idx + 1,
+      fromLocation: s.fromLocation,
+      toLocation: s.toLocation,
+      departureTime: s.departureTime ? s.departureTime.split('T')[0] : undefined,
+      arrivalTime: s.arrivalTime ? s.arrivalTime.split('T')[0] : undefined,
+      distanceKm: Number(s.distanceKm || 0),
+      tonnage: s.tonnage ? Number(s.tonnage) : undefined,
+      cargoDescription: s.cargoDescription || undefined,
+      notes: s.notes || undefined,
+    }));
+
+    const mappedExpenses: TripExpense[] = (t.expenses || []).map((e: any) => ({
+      id: e.id,
+      tripId: e.tripId,
+      tripNumber: t.tripNumber,
+      category: e.category,
+      description: e.description,
+      amount: Number(e.amount || 0),
+      expenseDate: e.expenseDate ? e.expenseDate.split('T')[0] : '',
+      paymentMethod: e.paymentMethod || 'Cash',
+      receiptReference: e.receiptReference || undefined,
+      submittedBy: e.submittedBy || 'Driver',
+      approvalStatus: e.approvalStatus || 'pending',
+      approvedAmount: e.approvedAmount ? Number(e.approvedAmount) : undefined,
+      reviewer: e.reviewer || undefined,
+      reviewNotes: e.reviewNotes || undefined,
+      reviewedAt: e.reviewedAt || undefined,
+    }));
+
+    return {
+      id: t.id,
+      tripNumber: t.tripNumber,
+      driverId: t.driverId,
+      driverName: t.driver?.fullName || 'Assigned Driver',
+      driverNumber: t.driver?.driverNumber || 'DRV-000',
+      vehicleId: t.vehicleId,
+      vehicleReg: t.vehicle?.registrationNumber || 'VEH-000',
+      startDate: t.startDate ? t.startDate.split('T')[0] : '',
+      endDate: t.endDate ? t.endDate.split('T')[0] : undefined,
+      purpose: t.purpose || 'Cargo Logistics Transit',
+      notes: t.notes || undefined,
+      status: t.status || 'draft',
+      version: t.version || 1,
+      startingLocation: t.startingLocation || '',
+      finalDestination: t.finalDestination || '',
+      routeSegments,
+      odometer: {
+        startingReading: odo.startingReading ? Number(odo.startingReading) : undefined,
+        startingTimestamp: odo.startingTimestamp || undefined,
+        startingSource: odo.startingSource || 'measured',
+        endingReading: odo.endingReading ? Number(odo.endingReading) : undefined,
+        endingTimestamp: odo.endingTimestamp || undefined,
+        endingSource: odo.endingSource || 'measured',
+        odometerCase: odo.odometerCase || 'case_1_both_available',
+        discrepancyFlag: Boolean(odo.discrepancyFlag),
+        discrepancyReason: odo.discrepancyReason || undefined,
+        validationStatus: odo.validationStatus || 'verified',
+      },
+      distance: {
+        measuredDistance: odo.measuredDistance ? Number(odo.measuredDistance) : undefined,
+        reportedDistance: odo.reportedDistance ? Number(odo.reportedDistance) : undefined,
+        derivedDistance: odo.derivedDistance ? Number(odo.derivedDistance) : undefined,
+        acceptedDistance: Number(odo.acceptedDistance || 0),
+        tyreAttributionEligible: Boolean(odo.tyreAttributionEligible),
+        tyreAttributionStatus: odo.tyreAttributionStatus || 'eligible',
+        tyreAttributionHoldReason: odo.tyreAttributionHoldReason || undefined,
+      },
+      fuel: {
+        openingFuelQuantity: fuel.openingFuelQuantity ? Number(fuel.openingFuelQuantity) : undefined,
+        fuelAddedDuringTrip: fuel.fuelAddedDuringTrip ? Number(fuel.fuelAddedDuringTrip) : 0,
+        closingFuelQuantity: fuel.closingFuelQuantity ? Number(fuel.closingFuelQuantity) : undefined,
+        calculatedConsumption: fuel.calculatedConsumption ? Number(fuel.calculatedConsumption) : undefined,
+        manuallyReportedLitres: fuel.manuallyReportedLitres ? Number(fuel.manuallyReportedLitres) : undefined,
+        acceptedFuelLitres: Number(fuel.acceptedFuelLitres || 0),
+        measurementMethod: fuel.measurementMethod || 'calculated_balance',
+        calculationStatus: fuel.calculationStatus || 'verified',
+        tripMileageKmPerLitre: fuel.tripMileageKmPerLitre ? Number(fuel.tripMileageKmPerLitre) : undefined,
+        mileageStatus: fuel.mileageStatus || 'valid',
+      },
+      expenses: mappedExpenses,
+      settlement: {
+        advanceIds: (t.advanceAllocations || []).map((a: any) => a.advanceTransactionId || a.id),
+        totalAdvancesIssued: Number(sett.totalAdvancesIssued || 0),
+        totalApprovedExpenses: Number(sett.totalApprovedExpenses || 0),
+        amountReturnedByDriver: Number(sett.amountReturnedByDriver || 0),
+        otherValidCredits: Number(sett.otherValidCredits || 0),
+        outstandingBalance: Number(sett.outstandingBalance || 0),
+        status: sett.status || 'pending',
+        authorizedPayrollRecoveryAmount: Number(sett.authorizedPayrollRecoveryAmount || 0),
+        settledDate: sett.settledDate || undefined,
+      },
+      fuelDeduction: {
+        benchmarkMileage: Number(fded.benchmarkMileage || 4.2),
+        tolerancePercent: Number(fded.tolerancePercent || 5),
+        expectedFuelLitres: Number(fded.expectedFuelLitres || 0),
+        allowedFuelLitres: Number(fded.allowedFuelLitres || 0),
+        excessFuelLitres: Number(fded.excessFuelLitres || 0),
+        applicableFuelPrice: Number(fded.applicableFuelPrice || 95),
+        potentialDeductionAmount: Number(fded.potentialDeductionAmount || 0),
+        approvedDeductionAmount: Number(fded.approvedDeductionAmount || 0),
+        calculationStatus: fded.calculationStatus || 'na',
+        reviewStatus: fded.reviewStatus || 'pending_review',
+        adjustmentReason: fded.adjustmentReason || undefined,
+        adjustedBy: fded.adjustedBy || undefined,
+        payrollMonth: fded.payrollMonth || undefined,
+      },
+      tlcmIntegration: {
+        syncStatus: 'pending',
+        odometerSubmitted: false,
+        tyreDistanceAttributed: false,
+      },
+      createdAt: t.createdAt || new Date().toISOString(),
+      updatedAt: t.updatedAt || new Date().toISOString(),
+    };
+  };
+
+  const mapBackendAdvance = (a: any): DriverAdvance => ({
+    id: a.id,
+    driverId: a.driverId,
+    driverName: a.driver?.fullName || 'Driver',
+    driverNumber: a.driver?.driverNumber || 'DRV-000',
+    vehicleId: a.trip?.vehicleId || undefined,
+    vehicleReg: a.trip?.vehicle?.registrationNumber || undefined,
+    tripId: a.tripId || undefined,
+    tripNumber: a.trip?.tripNumber || undefined,
+    advanceDate: a.transactionDate ? a.transactionDate.split('T')[0] : '',
+    advanceAmount: Number(a.debitAmount || 0),
+    advanceType: (a.advanceType || 'trip_advance') as any,
+    paymentMethod: (a.paymentMethod || 'Cash') as any,
+    referenceNumber: a.referenceNumber,
+    notes: a.notes || undefined,
+    approvedExpensesAllocated: (a.settlementAllocations || []).reduce((sum: number, alloc: any) => sum + Number(alloc.allocatedAmount || 0), 0),
+    amountReturned: Number(a.creditAmount || 0),
+    amountRecoveredThroughPayroll: 0,
+    outstandingBalance: Math.max(0, Number(a.debitAmount || 0) - Number(a.creditAmount || 0)),
+    status: (a.status === 'active' ? 'active' : 'settled') as any,
+    createdAt: a.createdAt || new Date().toISOString(),
+  });
+
+  // --- Real API Refresh Functions ---
+  const refreshDrivers = useCallback(async () => {
+    try {
+      const data = await driverApi.list({ limit: 100 });
+      if (Array.isArray(data) && data.length > 0) {
+        setDrivers(data.map(mapBackendDriver));
+      }
+    } catch (err) {
+      console.error('Failed to load drivers from API:', err);
+    }
+  }, []);
+
+  const refreshVehicles = useCallback(async () => {
+    setVehiclesLoading(true);
+    setVehiclesError(null);
+    try {
+      const data = await vehicleApi.list();
+      if (Array.isArray(data)) {
+        if (import.meta.env.DEV) {
+          console.info(`[TLCM Vehicle Integration] Loaded ${data.length} authoritative vehicles from TLCM database.`);
+        }
+        setVehicles(data.map(mapBackendVehicle));
+      } else {
+        setVehicles([]);
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to connect to authoritative TLCM vehicle database';
+      console.error('[TLCM Vehicle Integration Error]:', msg);
+      setVehiclesError(msg);
+      // DO NOT fall back to local mock data
+      setVehicles([]);
+    } finally {
+      setVehiclesLoading(false);
+    }
+  }, []);
+
+  const refreshTrips = useCallback(async () => {
+    try {
+      const data = await tripApi.list({ limit: 100 });
+      if (Array.isArray(data)) {
+        setTrips(data.map(mapBackendTrip));
+      }
+    } catch (err) {
+      console.error('Failed to load trips from API:', err);
+    }
+  }, []);
+
+  const refreshAdvances = useCallback(async () => {
+    try {
+      const data = await advanceApi.list({ limit: 100 });
+      if (Array.isArray(data)) {
+        setAdvances(data.map(mapBackendAdvance));
+      }
+    } catch (err) {
+      console.error('Failed to load advances from API:', err);
+    }
+  }, []);
+
+  const refreshExpenses = useCallback(async () => {
+    try {
+      // Refreshing trips updates their nested expenses
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to load expenses from API:', err);
+    }
+  }, [refreshTrips]);
+
+  // Initial Data Fetch on Mount
+  useEffect(() => {
+    refreshDrivers();
+    refreshVehicles();
+    refreshTrips();
+    refreshAdvances();
+  }, [refreshDrivers, refreshVehicles, refreshTrips, refreshAdvances]);
 
   const addAuditLog = (
     entityType: AuditLog['entityType'],
@@ -1072,6 +1340,13 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         retryIntegrationJob,
         syncVehicleMaster,
         triggerTLCMTyreAttribution,
+        vehiclesLoading,
+        vehiclesError,
+        refreshTrips,
+        refreshAdvances,
+        refreshExpenses,
+        refreshDrivers,
+        refreshVehicles,
         resetAllData
       }}
     >

@@ -7,7 +7,7 @@ import { formatKm, formatDateTime } from '../../utils/formatters';
 import { Truck, RefreshCw, Disc, Shield, ExternalLink, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const VehicleReferenceView: React.FC = () => {
-  const { vehicles, trips, syncVehicleMaster } = useFleetStore();
+  const { vehicles, vehiclesLoading, vehiclesError, refreshVehicles, trips, syncVehicleMaster } = useFleetStore();
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const handleSync = (vId: string) => {
@@ -136,12 +136,37 @@ export const VehicleReferenceView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => refreshVehicles()}
+            disabled={vehiclesLoading}
+            className="text-xs px-2.5 py-1 rounded-md font-semibold bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            title="Reload authoritative vehicles from TLCM database"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${vehiclesLoading ? 'animate-spin text-emerald-600' : ''}`} />
+            Refresh TLCM
+          </button>
           <span className="text-xs px-2.5 py-1 rounded-md font-semibold bg-emerald-100/70 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-            Connected to TLCM Pro API v2
+            Connected to TLCM Database ({vehicles.length} Authoritative Vehicles)
           </span>
         </div>
       </div>
+
+      {/* Error state with explicit retry option */}
+      {vehiclesError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-xs text-rose-700">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span><strong>Connection Error:</strong> {vehiclesError}</span>
+          </div>
+          <button
+            onClick={() => refreshVehicles()}
+            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-medium text-xs transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
 
       {/* Vehicles Table */}
       <DataTable

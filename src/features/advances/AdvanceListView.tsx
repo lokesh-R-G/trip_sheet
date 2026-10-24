@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useFleetStore } from '../../services/store';
+import { advanceApi, settlementApi } from '../../services/api';
 import { DriverAdvance, AdvanceType } from '../../types';
 import { DataTable, Column } from '../../components/common/DataTable';
 import { Badge } from '../../components/common/Badge';
@@ -8,15 +9,24 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 import { HandCoins, Plus, ArrowUpRight, CheckCircle2, ShieldCheck, DollarSign } from 'lucide-react';
 
 export const AdvanceListView: React.FC = () => {
-  const { advances, drivers, vehicles, trips, issueAdvance, recordSettlementReturn } = useFleetStore();
+  const { advances, drivers, vehicles, trips, issueAdvance, recordSettlementReturn, refreshAdvances, refreshTrips } = useFleetStore();
 
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [selectedAdvance, setSelectedAdvance] = useState<DriverAdvance | null>(null);
   const [returnAmount, setReturnAmount] = useState<number>(0);
+  const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states for issuing advance
   const [driverId, setDriverId] = useState(drivers[0]?.id || '');
+
+  React.useEffect(() => {
+    if (!driverId && drivers.length > 0) {
+      setDriverId(drivers[0].id);
+    }
+  }, [drivers, driverId]);
+
   const [vehicleId, setVehicleId] = useState('');
   const [tripId, setTripId] = useState('');
   const [advanceAmount, setAdvanceAmount] = useState<number>(5000);
@@ -31,32 +41,45 @@ export const AdvanceListView: React.FC = () => {
   const totalReturned = advances.reduce((sum, a) => sum + a.amountReturned, 0);
   const totalOutstanding = advances.reduce((sum, a) => sum + a.outstandingBalance, 0);
 
-  const handleIssueSubmit = (e: React.FormEvent) => {
+  const handleIssueSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!driverId || advanceAmount <= 0) return;
+    if (!driverId || advanceAmount <= 0 || isSubmitting) return;
 
-    const selDriver = drivers.find(d => d.id === driverId);
-    const selVehicle = vehicles.find(v => v.id === vehicleId);
-    const selTrip = trips.find(t => t.id === tripId);
+    try {
+      setIsSubmitting(true);
+      await advanceApi.create({
+        driverId,
+        tripId: tripId || null,
+        referenceNumber,
+        transactionDate: advanceDate,
+        transactionType: 'advance_issued',
+        advanceType: advanceType === 'trip_advance' ? 'trip_advance' : 'operational_advance',
+        amount: Number(advanceAmount),
+        currency: 'INR',
+        paymentMethod: paymentMethod.toLowerCase(),
+        notes: notes.trim() || null,
+      });
 
-    issueAdvance({
-      driverId,
-      driverName: selDriver?.fullName || 'Driver',
-      driverNumber: selDriver?.driverNumber || 'DRV',
-      vehicleId: vehicleId || undefined,
-      vehicleReg: selVehicle?.registrationNumber,
-      tripId: tripId || undefined,
-      tripNumber: selTrip?.tripNumber,
-      advanceDate,
-      advanceAmount: Number(advanceAmount),
-      advanceType,
-      paymentMethod,
-      referenceNumber,
-      notes: notes.trim() || undefined
-    });
+      // If tied to trip, allocate advance to the trip
+      if (tripId) {
+        try {
+          await advanceApi.allocateToTrip(tripId, advanceAmount);
+        } catch (allocErr) {
+          console.warn('Advance allocation note:', allocErr);
+        }
+      }
 
-    setIsIssueModalOpen(false);
-    setNotes('');
+      await refreshAdvances();
+      await refreshTrips();
+      setFeedback({ message: `Successfully issued advance of ₹${advanceAmount} to driver.`, type: 'success' });
+      setIsIssueModalOpen(false);
+      setNotes('');
+      setReferenceNumber(`ADV-VCH-${Math.floor(1000 + Math.random() * 9000)}`);
+    } catch (err: any) {
+      setFeedback({ message: err?.message || 'Failed to issue advance.', type: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOpenReturnModal = (adv: DriverAdvance) => {
@@ -65,14 +88,42 @@ export const AdvanceListView: React.FC = () => {
     setIsReturnModalOpen(true);
   };
 
-  const handleConfirmReturn = (e: React.FormEvent) => {
+  const handleConfirmReturn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAdvance || returnAmount <= 0) return;
+    if (!selectedAdvance || returnAmount <= 0 || isSubmitting) return;
 
-    if (selectedAdvance.tripId) {
-      recordSettlementReturn(selectedAdvance.tripId, returnAmount);
+    try {
+      setIsSubmitting(true);
+      if (selectedAdvance.tripId) {
+        await settlementApi.recordCashReturn(selectedAdvance.tripId, {
+          amount: Number(returnAmount),
+          referenceNumber: `RET-${Date.now().toString().slice(-6)}`,
+          transactionDate: new Date().toISOString().split('T')[0],
+          paymentMethod: 'cash',
+          notes: 'Driver cash return against outstanding advance',
+        });
+      } else {
+        await advanceApi.create({
+          driverId: selectedAdvance.driverId,
+          referenceNumber: `RET-${Date.now().toString().slice(-6)}`,
+          transactionDate: new Date().toISOString().split('T')[0],
+          transactionType: 'cash_return',
+          amount: Number(returnAmount),
+          currency: 'INR',
+          paymentMethod: 'cash',
+          notes: 'Cash return for unallocated driver advance',
+        });
+      }
+
+      await refreshAdvances();
+      await refreshTrips();
+      setFeedback({ message: `Recorded cash return of ₹${returnAmount}.`, type: 'success' });
+      setIsReturnModalOpen(false);
+    } catch (err: any) {
+      setFeedback({ message: err?.message || 'Failed to record cash return.', type: 'error' });
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsReturnModalOpen(false);
   };
 
   const columns: Column<DriverAdvance>[] = [
@@ -206,6 +257,20 @@ export const AdvanceListView: React.FC = () => {
           <span className="text-xs text-rose-600">Active ledger balances</span>
         </div>
       </div>
+
+      {/* Feedback Alert */}
+      {feedback && (
+        <div
+          className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border border-rose-200'
+          }`}
+        >
+          <span>{feedback.message}</span>
+          <button onClick={() => setFeedback(null)} className="font-bold ml-2">×</button>
+        </div>
+      )}
 
       {/* Table & Actions */}
       <div className="flex items-center justify-between">

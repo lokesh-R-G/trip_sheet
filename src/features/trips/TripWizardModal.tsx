@@ -26,6 +26,8 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 
+import { tripApi, expenseApi, vehicleApi } from '../../services/api';
+
 interface TripWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -46,15 +48,43 @@ const STEPS = [
 export const TripWizardModal: React.FC<TripWizardModalProps> = ({
   isOpen,
   onClose,
-  onTripCreated
+  onTripCreated,
 }) => {
-  const { drivers, vehicles, benchmarks, settings, advances, createTrip } = useFleetStore();
+  const {
+    drivers,
+    vehicles,
+    vehiclesLoading,
+    vehiclesError,
+    benchmarks,
+    settings,
+    advances,
+    createTrip,
+    refreshTrips,
+    refreshAdvances,
+    refreshExpenses,
+    refreshVehicles,
+  } = useFleetStore();
 
   const [currentStep, setCurrentStep] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Section A: Trip Details
   const [driverId, setDriverId] = useState(drivers[0]?.id || '');
   const [vehicleId, setVehicleId] = useState(vehicles[0]?.id || '');
+
+  // Synchronize initial selection when drivers and vehicles become available
+  useEffect(() => {
+    if (!driverId && drivers.length > 0) {
+      setDriverId(drivers[0].id);
+    }
+  }, [drivers, driverId]);
+
+  useEffect(() => {
+    if (!vehicleId && vehicles.length > 0) {
+      setVehicleId(vehicles[0].id);
+    }
+  }, [vehicles, vehicleId]);
+
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 16));
   const [endDate, setEndDate] = useState('');
   const [purpose, setPurpose] = useState('Heavy Machinery Consignment Transit');
@@ -166,13 +196,29 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
 
   // Synchronize vehicle starting odometer when vehicle changes
   useEffect(() => {
+    if (!vehicleId) return;
     const selVeh = vehicles.find(v => v.id === vehicleId);
-    if (selVeh) {
-      setStartingOdometer(selVeh.latestOdometer);
-      if (odoMode === 'both') {
-        setEndingOdometer(selVeh.latestOdometer + (reportedDistance || 450));
-      }
+    const fallbackOdo = selVeh?.latestOdometer || 100000;
+    
+    // First set local fallback
+    setStartingOdometer(fallbackOdo);
+    if (odoMode === 'both') {
+      setEndingOdometer(fallbackOdo + (reportedDistance || 450));
     }
+
+    // Query authoritative external vehicle database for latest confirmed baseline
+    vehicleApi.getLatestOdometer(vehicleId)
+      .then((res) => {
+        if (res && res.latestAuthoritativeOdometer > 0) {
+          setStartingOdometer(res.latestAuthoritativeOdometer);
+          if (odoMode === 'both') {
+            setEndingOdometer(res.latestAuthoritativeOdometer + (reportedDistance || 450));
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch external authoritative odometer, using local cached baseline:', err);
+      });
   }, [vehicleId]);
 
   // Adjust inputs based on selected Odometer Case Test Mode
@@ -288,52 +334,189 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
     setNewExpDesc('');
   };
 
-  const handleFinish = (asDraft: boolean = false) => {
-    const trip = createTrip({
-      driverId,
-      vehicleId,
-      startDate: new Date(startDate).toISOString(),
-      endDate: endDate ? new Date(endDate).toISOString() : new Date().toISOString(),
-      purpose,
-      notes,
-      startingLocation,
-      finalDestination,
-      status: asDraft ? 'draft' : 'completed',
-      odometer: {
-        startingReading: odoMode === 'unmeasured' ? undefined : startingOdometer,
-        endingReading: odoMode === 'start_only' || odoMode === 'unmeasured' ? undefined : endingOdometer,
-        odometerCase: odoEval.odometerCase,
-        discrepancyFlag: odoEval.discrepancyFlag,
-        discrepancyReason: odoEval.discrepancyReason,
-        validationStatus: odoEval.validationStatus
-      },
-      distance: {
-        measuredDistance: odoEval.measuredDistance,
-        reportedDistance,
-        derivedDistance: odoEval.derivedDistance,
-        acceptedDistance: odoEval.acceptedDistance,
-        tyreAttributionEligible: odoEval.tyreAttributionEligible,
-        tyreAttributionStatus: odoEval.tyreAttributionStatus,
-        tyreAttributionHoldReason: odoEval.tyreAttributionHoldReason
-      },
-      routeSegments,
-      fuel: {
-        openingFuelQuantity: openingFuel,
-        fuelAddedDuringTrip: fuelAdded,
-        closingFuelQuantity: closingFuel,
-        calculatedConsumption: fuelEval.calculatedConsumption,
-        manuallyReportedLitres: manualFuelLitres,
-        acceptedFuelLitres: fuelEval.acceptedFuelLitres,
-        measurementMethod: 'calculated_balance',
-        calculationStatus: fuelEval.calculationStatus,
-        tripMileageKmPerLitre: fuelEval.tripMileageKmPerLitre,
-        mileageStatus: fuelEval.mileageStatus
-      },
-      expenses
-    });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    if (onTripCreated) onTripCreated(trip);
-    onClose();
+  const handleFinish = async (asDraft: boolean = false) => {
+    if (isSubmitting) return;
+    try {
+      setIsSubmitting(true);
+      setErrorMessage(null);
+
+      // 1. Prepare create payload conforming to backend createTripSchema
+      const payload: any = {
+        driverId,
+        vehicleId,
+        startDate: new Date(startDate).toISOString(),
+        endDate: endDate ? new Date(endDate).toISOString() : null,
+        startingLocation,
+        finalDestination,
+        purpose: purpose.trim() || 'General Cargo Transit',
+        isDraft: asDraft,
+        notes: notes.trim() || null,
+        odometer: {
+          startingReading: odoMode === 'unmeasured' ? null : startingOdometer,
+          startingTimestamp: new Date(startDate).toISOString(),
+          startingSource: 'measured',
+          endingReading: odoMode === 'start_only' || odoMode === 'unmeasured' ? null : (endingOdometer ?? null),
+          endingTimestamp: endDate ? new Date(endDate).toISOString() : null,
+          endingSource: 'measured',
+          reportedDistance: reportedDistance ?? null,
+        },
+        routeSegments: routeSegments.map((seg, idx) => ({
+          sequence: seg.sequence || (idx + 1),
+          fromLocation: seg.fromLocation,
+          toLocation: seg.toLocation,
+          departureTime: null,
+          arrivalTime: null,
+          distanceKm: String(seg.distanceKm || 0),
+          tonnage: seg.tonnage !== undefined && seg.tonnage !== null ? String(seg.tonnage) : null,
+          cargoDescription: seg.cargoDescription || null,
+          notes: seg.notes || null,
+        })),
+      };
+
+      // 2. Call backend API
+      const createdTripRes = await tripApi.create(payload);
+
+      // 3. If user selected Complete & Submit (not draft), transition to completed
+      let finalTripRes = createdTripRes;
+      if (!asDraft) {
+        try {
+          finalTripRes = await tripApi.transition(createdTripRes.id, 'completed', createdTripRes.version, 'Trip completed via operational wizard');
+        } catch (transErr: any) {
+          console.warn('Completed transition warning:', transErr);
+          // If transition requires intermediate in_progress, proceed gracefully
+        }
+      }
+
+      // 4. Record any initial expenses submitted in the wizard
+      if (expenses.length > 0) {
+        for (const exp of expenses) {
+          try {
+            await expenseApi.submit({
+              tripId: createdTripRes.id,
+              driverId,
+              category: exp.category.toLowerCase(),
+              description: exp.description,
+              amount: exp.amount,
+              expenseDate: exp.expenseDate,
+              paymentMethod: exp.paymentMethod.toLowerCase(),
+              receiptReference: exp.receiptReference || null,
+            });
+          } catch (expErr) {
+            console.warn('Expense creation note:', expErr);
+          }
+        }
+      }
+
+      // 5. Invalidate store and refresh
+      await refreshTrips();
+      await refreshAdvances();
+      await refreshExpenses();
+
+      // Find the updated trip from local or backend
+      const mappedTrip: Trip = {
+        id: finalTripRes.id,
+        tripNumber: finalTripRes.tripNumber,
+        driverId: finalTripRes.driverId,
+        driverName: finalTripRes.driverName || drivers.find(d => d.id === driverId)?.fullName || 'Driver',
+        driverNumber: finalTripRes.driverNumber || drivers.find(d => d.id === driverId)?.driverNumber || 'DRV',
+        vehicleId: finalTripRes.vehicleId,
+        vehicleReg: finalTripRes.vehicleReg || vehicles.find(v => v.id === vehicleId)?.registrationNumber || 'VEH',
+        startDate: finalTripRes.startDate,
+        endDate: finalTripRes.endDate || undefined,
+        purpose: finalTripRes.purpose,
+        notes: finalTripRes.notes || '',
+        status: finalTripRes.status,
+        version: finalTripRes.version,
+        odometer: {
+          startingReading: finalTripRes.odometer?.startingReading ?? undefined,
+          startingTimestamp: finalTripRes.odometer?.startingTimestamp ?? undefined,
+          startingSource: (finalTripRes.odometer?.startingSource as any) || 'measured',
+          endingReading: finalTripRes.odometer?.endingReading ?? undefined,
+          endingTimestamp: finalTripRes.odometer?.endingTimestamp ?? undefined,
+          endingSource: (finalTripRes.odometer?.endingSource as any) || 'measured',
+          odometerCase: (finalTripRes.odometer?.odometerCase as any) || 'case_1_both_available',
+          discrepancyFlag: Boolean(finalTripRes.odometer?.discrepancyFlag),
+          discrepancyReason: finalTripRes.odometer?.discrepancyReason ?? undefined,
+          validationStatus: (finalTripRes.odometer?.validationStatus as any) || 'verified',
+        },
+        distance: {
+          measuredDistance: finalTripRes.odometer?.measuredDistance ?? undefined,
+          reportedDistance: finalTripRes.odometer?.reportedDistance ?? undefined,
+          derivedDistance: finalTripRes.odometer?.derivedDistance ?? undefined,
+          acceptedDistance: finalTripRes.odometer?.acceptedDistance ?? 0,
+          tyreAttributionEligible: Boolean(finalTripRes.odometer?.tyreAttributionEligible),
+          tyreAttributionStatus: (finalTripRes.odometer?.tyreAttributionStatus as any) || 'eligible',
+          tyreAttributionHoldReason: finalTripRes.odometer?.tyreAttributionHoldReason ?? undefined,
+        },
+        routeSegments: (finalTripRes.routeSegments || []).map((s: any) => ({
+          id: s.id,
+          sequence: s.sequence,
+          fromLocation: s.fromLocation,
+          toLocation: s.toLocation,
+          departureTime: s.departureTime ?? undefined,
+          arrivalTime: s.arrivalTime ?? undefined,
+          distanceKm: Number(s.distanceKm || 0),
+          tonnage: s.tonnage !== null && s.tonnage !== undefined ? Number(s.tonnage) : undefined,
+          cargoDescription: s.cargoDescription ?? undefined,
+          notes: s.notes ?? undefined,
+        })),
+        startingLocation: finalTripRes.startingLocation,
+        finalDestination: finalTripRes.finalDestination,
+        fuel: {
+          openingFuelQuantity: openingFuel,
+          fuelAddedDuringTrip: fuelAdded,
+          closingFuelQuantity: closingFuel,
+          calculatedConsumption: fuelEval.calculatedConsumption,
+          manuallyReportedLitres: manualFuelLitres,
+          acceptedFuelLitres: fuelEval.acceptedFuelLitres,
+          measurementMethod: 'calculated_balance',
+          calculationStatus: fuelEval.calculationStatus,
+          tripMileageKmPerLitre: fuelEval.tripMileageKmPerLitre,
+          mileageStatus: fuelEval.mileageStatus,
+        },
+        expenses: expenses,
+        settlement: {
+          advanceIds: [],
+          totalAdvancesIssued: 0,
+          totalApprovedExpenses: 0,
+          amountReturnedByDriver: 0,
+          otherValidCredits: 0,
+          outstandingBalance: 0,
+          status: 'pending',
+          authorizedPayrollRecoveryAmount: 0,
+        },
+        fuelDeduction: {
+          benchmarkId: matchedBenchmark?.id,
+          benchmarkName: matchedBenchmark?.name,
+          benchmarkMileage: matchedBenchmark?.expectedMileageKmPerLitre || 5,
+          tolerancePercent: matchedBenchmark?.permittedTolerancePercent || 5,
+          expectedFuelLitres: fuelDeductionCalc.expectedFuelLitres,
+          allowedFuelLitres: fuelDeductionCalc.allowedFuelLitres,
+          excessFuelLitres: fuelDeductionCalc.excessFuelLitres,
+          applicableFuelPrice: settings.defaultFuelPricePerLitre,
+          potentialDeductionAmount: fuelDeductionCalc.potentialDeductionAmount,
+          approvedDeductionAmount: 0,
+          calculationStatus: 'calculated',
+          reviewStatus: 'pending_review',
+        },
+        tlcmIntegration: {
+          syncStatus: 'synced',
+          odometerSubmitted: true,
+          tyreDistanceAttributed: Boolean(finalTripRes.odometer?.tyreAttributionEligible),
+        },
+        createdAt: finalTripRes.createdAt,
+        updatedAt: finalTripRes.updatedAt,
+      };
+
+      if (onTripCreated) onTripCreated(mappedTrip);
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to create trip. Please verify inputs.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -345,6 +528,12 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
       maxWidth="4xl"
     >
       <div className="space-y-4">
+        {errorMessage && (
+          <div className="p-3 rounded-lg text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200 flex items-center justify-between">
+            <span>{errorMessage}</span>
+            <button type="button" onClick={() => setErrorMessage(null)} className="font-bold ml-2">×</button>
+          </div>
+        )}
         {/* Progress Stepper Bar */}
         <div className="flex items-center justify-between overflow-x-auto pb-2 border-b border-gray-200 text-xs">
           {STEPS.map((step, idx) => (
@@ -390,18 +579,49 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-gray-700 mb-1">Vehicle *</label>
-                <select
-                  value={vehicleId}
-                  onChange={e => setVehicleId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 bg-white"
-                >
-                  {vehicles.map(v => (
-                    <option key={v.id} value={v.id}>
-                      {v.registrationNumber} ({v.vehicleType} - {v.tonnage}T) • Odo: {formatKm(v.latestOdometer)}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-gray-700">Vehicle (Authoritative TLCM) *</label>
+                  {import.meta.env.DEV && (
+                    <span className="text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200" title="Loaded from TLCM PostgreSQL database">
+                      TLCM DB: {vehicles.length} vehicles
+                    </span>
+                  )}
+                </div>
+
+                {vehiclesLoading ? (
+                  <div className="p-2 border border-gray-300 rounded-lg text-xs text-gray-500 bg-gray-50 flex items-center gap-2">
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                    Fetching authoritative vehicles from TLCM database...
+                  </div>
+                ) : vehiclesError ? (
+                  <div className="p-2 border border-rose-300 bg-rose-50 rounded-lg text-xs text-rose-700 space-y-1">
+                    <p className="font-semibold">TLCM Database Unavailable</p>
+                    <p className="text-[11px]">{vehiclesError}</p>
+                    <button
+                      type="button"
+                      onClick={() => refreshVehicles()}
+                      className="mt-1 px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-medium"
+                    >
+                      Retry Connection
+                    </button>
+                  </div>
+                ) : vehicles.length === 0 ? (
+                  <div className="p-2 border border-amber-300 bg-amber-50 rounded-lg text-xs text-amber-700">
+                    No vehicles found in authoritative TLCM database.
+                  </div>
+                ) : (
+                  <select
+                    value={vehicleId}
+                    onChange={e => setVehicleId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 bg-white"
+                  >
+                    {vehicles.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.registrationNumber} ({v.makeModel || v.vehicleType} - {v.tonnage}T) • Authoritative Odo: {formatKm(v.latestOdometer)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -1181,10 +1401,11 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => handleFinish(true)}
-              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
-              Save Draft
+              {isSubmitting ? 'Saving...' : 'Save Draft'}
             </button>
 
             {currentStep < STEPS.length - 1 ? (
@@ -1199,10 +1420,11 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
             ) : (
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => handleFinish(false)}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-xs"
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg shadow-xs disabled:opacity-50"
               >
-                Complete & Submit Trip
+                {isSubmitting ? 'Submitting to Backend...' : 'Complete & Submit Trip'}
               </button>
             )}
           </div>

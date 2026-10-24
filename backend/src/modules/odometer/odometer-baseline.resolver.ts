@@ -8,15 +8,28 @@ export interface VehicleBaselineInfo {
   effectiveBaselineOdometer: number;
 }
 
+import { externalVehicleRepository } from '../vehicles/external-vehicle.repository.js';
+
 export class OdometerBaselineResolver {
   public async resolveBaseline(vehicleId: string, beforeTimestamp?: Date, excludeTripId?: string): Promise<VehicleBaselineInfo | null> {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: vehicleId },
-      select: { id: true, registrationNumber: true, latestOdometer: true },
+      select: { id: true, tlcmVehicleId: true, registrationNumber: true, latestOdometer: true },
     });
 
     if (!vehicle) {
       return null;
+    }
+
+    // Attempt to query the external vehicle system for the authoritative baseline
+    let authoritativeMasterOdometer = vehicle.latestOdometer;
+    try {
+      const extOdo = await externalVehicleRepository.getLatestAuthoritativeOdometer(vehicle.tlcmVehicleId || vehicle.registrationNumber);
+      if (extOdo && extOdo.latestOdometer > 0) {
+        authoritativeMasterOdometer = extOdo.latestOdometer;
+      }
+    } catch {
+      // If external DB is temporarily unreachable during baseline resolve, fall back to local cached latestOdometer
     }
 
     // Find the latest completed or verified trip odometer record before this trip
@@ -39,12 +52,12 @@ export class OdometerBaselineResolver {
     });
 
     const lastTripEnding = lastTripRecord?.endingReading ?? null;
-    const effectiveBaseline = Math.max(vehicle.latestOdometer, lastTripEnding || 0);
+    const effectiveBaseline = Math.max(authoritativeMasterOdometer, lastTripEnding || 0);
 
     return {
       vehicleId: vehicle.id,
       registrationNumber: vehicle.registrationNumber,
-      masterLatestOdometer: vehicle.latestOdometer,
+      masterLatestOdometer: authoritativeMasterOdometer,
       lastTripEndingOdometer: lastTripEnding,
       effectiveBaselineOdometer: effectiveBaseline,
     };

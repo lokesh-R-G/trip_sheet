@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useFleetStore } from '../../services/store';
+import { expenseApi } from '../../services/api';
 import { TripExpense, ExpenseApprovalStatus } from '../../types';
 import { DataTable, Column } from '../../components/common/DataTable';
 import { Badge } from '../../components/common/Badge';
@@ -7,10 +8,10 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 import { Receipt, Check, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 export const TripExpenseApprovalView: React.FC = () => {
-  const { trips, approveExpense, rejectExpense } = useFleetStore();
+  const { trips, approveExpense, rejectExpense, refreshExpenses, refreshTrips } = useFleetStore();
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Flatten expenses across trips
   const allExpenses: (TripExpense & { driverName: string; vehicleReg: string })[] = React.useMemo(() => {
@@ -28,16 +29,31 @@ export const TripExpenseApprovalView: React.FC = () => {
     return allExpenses.filter(e => e.approvalStatus === statusFilter);
   }, [allExpenses, statusFilter]);
 
-  const handleApprove = (tripId: string, expId: string) => {
-    approveExpense(tripId, expId);
-    setFeedback(`Approved expense #${expId.slice(-4)}`);
-    setTimeout(() => setFeedback(null), 3000);
+  const handleApprove = async (tripId: string, expId: string) => {
+    try {
+      await expenseApi.review(expId, { action: 'approve' });
+      await refreshExpenses();
+      await refreshTrips();
+      setFeedback({ message: `Approved expense #${expId.slice(-4)} and persisted to database.`, type: 'success' });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err: any) {
+      setFeedback({ message: err?.message || 'Failed to approve expense on backend.', type: 'error' });
+    }
   };
 
-  const handleReject = (tripId: string, expId: string) => {
-    rejectExpense(tripId, expId, 'Audit rejection: Receipt documentation incomplete');
-    setFeedback(`Rejected expense #${expId.slice(-4)}`);
-    setTimeout(() => setFeedback(null), 3000);
+  const handleReject = async (tripId: string, expId: string) => {
+    try {
+      await expenseApi.review(expId, {
+        action: 'reject',
+        rejectionReason: 'Audit rejection: Receipt documentation incomplete or limit exceeded',
+      });
+      await refreshExpenses();
+      await refreshTrips();
+      setFeedback({ message: `Rejected expense #${expId.slice(-4)} on backend.`, type: 'error' });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err: any) {
+      setFeedback({ message: err?.message || 'Failed to reject expense on backend.', type: 'error' });
+    }
   };
 
   const pendingCount = allExpenses.filter(e => e.approvalStatus === 'pending').length;
@@ -170,9 +186,18 @@ export const TripExpenseApprovalView: React.FC = () => {
       </div>
 
       {feedback && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-semibold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-          <span>{feedback}</span>
+        <div
+          className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border border-rose-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className={`w-4 h-4 ${feedback.type === 'success' ? 'text-emerald-700' : 'text-rose-700'}`} />
+            <span>{feedback.message}</span>
+          </div>
+          <button onClick={() => setFeedback(null)} className="font-bold ml-2">×</button>
         </div>
       )}
 

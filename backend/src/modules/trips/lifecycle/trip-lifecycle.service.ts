@@ -17,6 +17,7 @@ import {
   DomainValidationError,
 } from '../../../shared/errors/index.js';
 import { dec } from '../../../shared/decimal/index.js';
+import { externalVehicleRepository } from '../../vehicles/external-vehicle.repository.js';
 
 export class TripLifecycleService {
   constructor(
@@ -171,6 +172,21 @@ export class TripLifecycleService {
       return createdTrip;
     });
 
+    // Write accepted odometer reading to authoritative external vehicle database AFTER local transaction succeeds
+    if (
+      distanceEval.validationStatus === 'verified' &&
+      data.odometer?.endingReading &&
+      data.odometer.endingReading > vehicle!.latestOdometer
+    ) {
+      await externalVehicleRepository.updateAuthoritativeOdometer({
+        vehicleIdentifier: vehicle!.tlcmVehicleId || vehicle!.registrationNumber,
+        newReading: data.odometer.endingReading,
+        recordedAt: data.odometer.endingTimestamp ? new Date(data.odometer.endingTimestamp) : new Date(),
+        tripNumber: trip.tripNumber,
+        reason: `Odometer reading verified and persisted upon trip ${trip.tripNumber} creation`,
+      });
+    }
+
     const fullTrip = await this.repo.findById(trip.id);
     return this.mapToResponse(fullTrip!);
   }
@@ -247,8 +263,10 @@ export class TripLifecycleService {
         status: targetStatus,
       };
 
-      if (targetStatus === 'completed' && !trip.endDate) {
-        updateData.endDate = new Date();
+      if (targetStatus === 'completed') {
+        if (!trip.endDate) {
+          updateData.endDate = new Date();
+        }
       }
 
       await this.repo.updateWithOptimisticLock(id, dto.expectedVersion, updateData, tx);
@@ -264,6 +282,25 @@ export class TripLifecycleService {
 
       await this.auditRepo.create(auditEvent, tx);
     });
+
+    // If trip completed with verified ending reading, write to authoritative external database
+    if (
+      targetStatus === 'completed' &&
+      trip.odometerRecord &&
+      trip.odometerRecord.validationStatus === 'verified' &&
+      trip.odometerRecord.endingReading
+    ) {
+      const vehicle = await prisma.vehicle.findUnique({ where: { id: trip.vehicleId } });
+      if (vehicle) {
+        await externalVehicleRepository.updateAuthoritativeOdometer({
+          vehicleIdentifier: vehicle.tlcmVehicleId || vehicle.registrationNumber,
+          newReading: trip.odometerRecord.endingReading,
+          recordedAt: trip.odometerRecord.endingTimestamp || new Date(),
+          tripNumber: trip.tripNumber,
+          reason: `Authoritative odometer write upon trip ${trip.tripNumber} completion`,
+        });
+      }
+    }
 
     const updated = await this.repo.findById(id);
     return this.mapToResponse(updated!);

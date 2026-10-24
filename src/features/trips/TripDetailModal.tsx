@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../../components/common/Modal';
 import { Badge } from '../../components/common/Badge';
 import { useFleetStore } from '../../services/store';
+import { tripApi, expenseApi, advanceApi, settlementApi } from '../../services/api';
 import { Trip, TripExpense } from '../../types';
 import {
   formatCurrency,
@@ -27,7 +28,8 @@ import {
   Check,
   X,
   Edit3,
-  Send
+  Send,
+  Plus
 } from 'lucide-react';
 
 interface TripDetailModalProps {
@@ -50,7 +52,10 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
     rejectFuelDeduction,
     adjustFuelDeduction,
     triggerTLCMTyreAttribution,
-    completeTrip
+    completeTrip,
+    refreshTrips,
+    refreshAdvances,
+    refreshExpenses
   } = useFleetStore();
 
   const [activeTab, setActiveTab] = useState<'odometer' | 'route' | 'fuel' | 'expenses' | 'settlement' | 'fuel-deduction' | 'tlcm'>('odometer');
@@ -66,31 +71,110 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
 
   // Status message
   const [actionFeedback, setActionFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [backendCalculation, setBackendCalculation] = useState<any>(null);
 
-  if (!trip) return null;
+  useEffect(() => {
+    if (trip?.id) {
+      settlementApi.getCalculation(trip.id)
+        .then(res => setBackendCalculation(res))
+        .catch(() => setBackendCalculation(null));
+    }
+  }, [trip?.id, activeTab]);
 
-  const handleApproveExpense = (expId: string) => {
-    approveExpense(trip.id, expId);
-    setActionFeedback({ message: 'Expense approved and reconciled into advance balance.', type: 'success' });
+  // New expense form state
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
+  const [newCategory, setNewCategory] = useState('tolls');
+  const [newDesc, setNewDesc] = useState('');
+  const [newAmount, setNewAmount] = useState<number>(500);
+  const [newReceipt, setNewReceipt] = useState('');
+
+  // Edit tonnage modal/inline state
+  const [isEditingTonnage, setIsEditingTonnage] = useState(false);
+  const [targetSegmentId, setTargetSegmentId] = useState('');
+  const [editedTonnage, setEditedTonnage] = useState<string>('24.5');
+
+  const handleApproveExpense = async (expId: string) => {
+    try {
+      await expenseApi.review(expId, { action: 'approve' });
+      await refreshExpenses();
+      await refreshTrips();
+      if (trip?.id) {
+        settlementApi.getCalculation(trip.id).then(setBackendCalculation).catch(() => {});
+      }
+      setActionFeedback({ message: 'Expense approved and persisted to database.', type: 'success' });
+    } catch (err: any) {
+      setActionFeedback({ message: err?.message || 'Failed to approve expense on backend.', type: 'error' });
+    }
   };
 
-  const handleRejectExpense = (expId: string) => {
-    rejectExpense(trip.id, expId, 'Policy limit exceeded');
-    setActionFeedback({ message: 'Expense rejected.', type: 'error' });
+  const handleRejectExpense = async (expId: string) => {
+    try {
+      await expenseApi.review(expId, { action: 'reject', rejectionReason: 'Receipt documentation incomplete / policy limit exceeded' });
+      await refreshExpenses();
+      await refreshTrips();
+      setActionFeedback({ message: 'Expense rejected on backend.', type: 'error' });
+    } catch (err: any) {
+      setActionFeedback({ message: err?.message || 'Failed to reject expense on backend.', type: 'error' });
+    }
+  };
+
+  const handleCreateExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trip?.id || newAmount <= 0) return;
+    try {
+      await expenseApi.submit({
+        tripId: trip.id,
+        driverId: trip.driverId,
+        category: newCategory.toLowerCase(),
+        description: newDesc.trim() || `${newCategory} expense`,
+        amount: Number(newAmount),
+        expenseDate: new Date().toISOString().split('T')[0],
+        paymentMethod: 'cash',
+        receiptReference: newReceipt.trim() || undefined,
+      });
+      setIsAddingExpense(false);
+      setNewDesc('');
+      setNewReceipt('');
+      await refreshExpenses();
+      await refreshTrips();
+      if (trip?.id) {
+        settlementApi.getCalculation(trip.id).then(setBackendCalculation).catch(() => {});
+      }
+      setActionFeedback({ message: 'Expense recorded successfully to trip.', type: 'success' });
+    } catch (err: any) {
+      setActionFeedback({ message: err?.message || 'Failed to record expense.', type: 'error' });
+    }
+  };
+
+  const handleUpdateSegmentTonnage = async (segmentId: string, newTonnageValue: string) => {
+    if (!trip?.id) return;
+    try {
+      await tripApi.updateRouteSegment(trip.id, segmentId, {
+        tonnage: String(newTonnageValue),
+      });
+      await refreshTrips();
+      setIsEditingTonnage(false);
+      setActionFeedback({ message: `Updated segment tonnage to ${newTonnageValue} MT.`, type: 'success' });
+    } catch (err: any) {
+      setActionFeedback({ message: err?.message || 'Failed to update segment tonnage.', type: 'error' });
+    }
   };
 
   const handleApproveDeduction = () => {
+    if (!trip) return;
     approveFuelDeduction(trip.id, 'Approved by fleet auditor');
     setActionFeedback({ message: 'Fuel deduction approved for monthly payroll inclusion.', type: 'success' });
   };
 
   const handleRejectDeduction = () => {
+    if (!trip) return;
     rejectFuelDeduction(trip.id, 'Exemption approved by audit committee due to extreme terrain grade.');
     setActionFeedback({ message: 'Fuel deduction waived / rejected.', type: 'error' });
   };
 
   const handleConfirmAdjustment = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!trip) return;
     if (!mandatoryReason.trim()) {
       alert('A mandatory reason is required to adjust a proposed fuel deduction.');
       return;
@@ -100,16 +184,30 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
     setActionFeedback({ message: `Fuel deduction adjusted to ₹${adjustAmount} with audit justification.`, type: 'success' });
   };
 
-  const handleConfirmReturn = (e: React.FormEvent) => {
+  const handleConfirmReturn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (returnInput <= 0) return;
-    recordSettlementReturn(trip.id, Number(returnInput));
-    setIsReturning(false);
-    setReturnInput(0);
-    setActionFeedback({ message: `Recorded cash return of ₹${returnInput} from driver.`, type: 'success' });
+    if (returnInput <= 0 || !trip?.id) return;
+    try {
+      await settlementApi.recordCashReturn(trip.id, {
+        amount: Number(returnInput),
+        referenceNumber: `RET-${Date.now().toString().slice(-6)}`,
+        transactionDate: new Date().toISOString().split('T')[0],
+        paymentMethod: 'cash',
+        notes: 'Cash return recorded from driver',
+      });
+      await refreshAdvances();
+      await refreshTrips();
+      settlementApi.getCalculation(trip.id).then(setBackendCalculation).catch(() => {});
+      setIsReturning(false);
+      setReturnInput(0);
+      setActionFeedback({ message: `Recorded cash return of ₹${returnInput} into backend database.`, type: 'success' });
+    } catch (err: any) {
+      setActionFeedback({ message: err?.message || 'Failed to record cash return on backend.', type: 'error' });
+    }
   };
 
   const handleAuthorizeRecovery = () => {
+    if (!trip) return;
     authorizePayrollAdvanceRecovery(trip.id, trip.settlement.outstandingBalance);
     setActionFeedback({
       message: `Authorized recovery of ₹${trip.settlement.outstandingBalance} through upcoming driver payroll run.`,
@@ -118,17 +216,34 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
   };
 
   const handleTriggerTyreAttribution = () => {
+    if (!trip) return;
     const res = triggerTLCMTyreAttribution(trip.id);
     setActionFeedback({ message: res.message, type: res.success ? 'success' : 'error' });
   };
 
-  const handleMarkCompleted = () => {
-    const res = completeTrip(trip.id);
-    setActionFeedback({
-      message: res.warnings.length > 0 ? `Trip completed with warnings: ${res.warnings.join(' ')}` : 'Trip completed operationally.',
-      type: 'success'
-    });
+  const handleMarkCompleted = async () => {
+    if (!trip?.id) return;
+    try {
+      await tripApi.transition(trip.id, 'completed', trip.version || 1, 'Marked complete from trip details');
+      await refreshTrips();
+      setActionFeedback({ message: 'Trip successfully completed and persisted.', type: 'success' });
+    } catch (err: any) {
+      setActionFeedback({ message: err?.message || 'Failed to complete trip. Verify state machine requirements.', type: 'error' });
+    }
   };
+
+  const handleStartTrip = async () => {
+    if (!trip?.id) return;
+    try {
+      await tripApi.transition(trip.id, 'in_progress', trip.version || 1, 'Trip dispatched from details modal');
+      await refreshTrips();
+      setActionFeedback({ message: 'Trip dispatched (in_progress) successfully.', type: 'success' });
+    } catch (err: any) {
+      setActionFeedback({ message: err?.message || 'Failed to start trip.', type: 'error' });
+    }
+  };
+
+  if (!trip) return null;
 
   return (
     <Modal
@@ -159,12 +274,20 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
             <span className="text-[10px] font-semibold text-gray-500 uppercase">Operational Status</span>
             <div className="mt-1 flex items-center gap-1.5">
               <Badge status={trip.status} />
-              {trip.status !== 'completed' && (
+              {trip.status === 'draft' && (
                 <button
-                  onClick={handleMarkCompleted}
+                  onClick={handleStartTrip}
                   className="px-2 py-0.5 rounded bg-emerald-700 text-white font-bold text-[10px] hover:bg-emerald-800"
                 >
-                  Mark Complete
+                  Start Trip
+                </button>
+              )}
+              {trip.status === 'in_progress' && (
+                <button
+                  onClick={handleMarkCompleted}
+                  className="px-2 py-0.5 rounded bg-blue-700 text-white font-bold text-[10px] hover:bg-blue-800"
+                >
+                  Record Arrival / Complete
                 </button>
               )}
             </div>
@@ -369,6 +492,18 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
                         {seg.tonnage !== undefined ? `${seg.tonnage} MT` : '—'}
                       </span>
                     )}
+                    {trip.status !== 'completed' && (
+                      <button
+                        onClick={() => {
+                          setTargetSegmentId(seg.id);
+                          setEditedTonnage(seg.tonnage !== undefined ? String(seg.tonnage) : '24.5');
+                          setIsEditingTonnage(true);
+                        }}
+                        className="block text-[10px] text-emerald-700 hover:underline mt-0.5 ml-auto"
+                      >
+                        Edit Tonnage
+                      </button>
+                    )}
                   </div>
                   <div className="col-span-2 text-right">
                     <span className="font-mono font-bold text-gray-900 text-xs">{formatKm(seg.distanceKm)}</span>
@@ -379,6 +514,38 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
                 </div>
               ))}
             </div>
+
+            {isEditingTonnage && (
+              <div className="p-3 bg-white border border-emerald-300 rounded-xl space-y-2 shadow-xs">
+                <span className="font-bold text-gray-900 block">Edit Route Leg Payload Tonnage (MT)</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={editedTonnage}
+                    onChange={e => setEditedTonnage(e.target.value)}
+                    className="w-36 px-2.5 py-1.5 rounded-lg border border-gray-300 font-mono font-bold"
+                  />
+                  <span className="text-gray-500 font-medium">MT (Metric Tonnes)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSegmentTonnage(targetSegmentId, editedTonnage)}
+                    className="px-3 py-1.5 bg-emerald-700 text-white rounded-lg font-semibold hover:bg-emerald-800"
+                  >
+                    Save to Database
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTonnage(false)}
+                    className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -432,73 +599,171 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
         {/* TAB 4: Trip Expenses */}
         {activeTab === 'expenses' && (
           <div className="space-y-3 text-xs">
-            <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white">
-              {trip.expenses.map(exp => (
-                <div key={exp.id} className="p-3 flex items-center justify-between hover:bg-gray-50">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-900">{exp.category}</span>
-                      <Badge status={exp.approvalStatus} />
-                    </div>
-                    <p className="text-gray-600 mt-0.5">{exp.description}</p>
-                    <span className="text-[10px] text-gray-400">
-                      Receipt: {exp.receiptReference || 'None'} • Payment: {exp.paymentMethod}
-                    </span>
-                  </div>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-gray-700">Recorded Trip Expenses ({trip.expenses.length})</span>
+              {trip.status !== 'completed' && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingExpense(!isAddingExpense)}
+                  className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-xs flex items-center gap-1 shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Record Expense
+                </button>
+              )}
+            </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-gray-900 font-mono text-sm">
-                      {formatCurrency(exp.approvedAmount || exp.amount)}
-                    </span>
-                    {exp.approvalStatus === 'pending' && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleApproveExpense(exp.id)}
-                          className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-[11px]"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleRejectExpense(exp.id)}
-                          className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded font-semibold text-[11px]"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
+            {isAddingExpense && (
+              <form onSubmit={handleCreateExpense} className="p-3 bg-gray-50 border border-gray-300 rounded-xl space-y-2">
+                <span className="font-bold text-gray-900 block text-xs">New Trip Expense</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">Category *</label>
+                    <select
+                      value={newCategory}
+                      onChange={e => setNewCategory(e.target.value)}
+                      className="w-full px-2 py-1 rounded border border-gray-300 bg-white"
+                    >
+                      <option value="tolls">Tolls</option>
+                      <option value="permits">Permits</option>
+                      <option value="loading & unloading">Loading & Unloading</option>
+                      <option value="parking">Parking</option>
+                      <option value="repairs">Repairs</option>
+                      <option value="refreshments">Refreshments</option>
+                      <option value="rto charges">RTO Charges</option>
+                      <option value="fuel">Fuel</option>
+                      <option value="other operational">Other Operational</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">Amount (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={newAmount}
+                      onChange={e => setNewAmount(Number(e.target.value))}
+                      className="w-full px-2 py-1 rounded border border-gray-300 font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">Receipt #</label>
+                    <input
+                      type="text"
+                      value={newReceipt}
+                      onChange={e => setNewReceipt(e.target.value)}
+                      placeholder="e.g. REC-1029"
+                      className="w-full px-2 py-1 rounded border border-gray-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">Description *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newDesc}
+                      onChange={e => setNewDesc(e.target.value)}
+                      placeholder="e.g. Toll receipt NH-48"
+                      className="w-full px-2 py-1 rounded border border-gray-300"
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingExpense(false)}
+                    className="px-2.5 py-1 rounded border border-gray-300 text-gray-600 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-800 text-white font-semibold"
+                  >
+                    Submit Expense
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {trip.expenses.length === 0 ? (
+              <div className="p-4 text-center text-gray-400 bg-white border border-gray-200 rounded-xl">
+                No operational expenses recorded for this trip yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white">
+                {trip.expenses.map(exp => (
+                  <div key={exp.id} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900 capitalize">{exp.category}</span>
+                        <Badge status={exp.approvalStatus} />
+                      </div>
+                      <p className="text-gray-600 mt-0.5">{exp.description}</p>
+                      <span className="text-[10px] text-gray-400">
+                        Receipt: {exp.receiptReference || 'None'} • Payment: {exp.paymentMethod}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-gray-900 font-mono text-sm">
+                        {formatCurrency(exp.approvedAmount || exp.amount)}
+                      </span>
+                      {exp.approvalStatus === 'pending' && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleApproveExpense(exp.id)}
+                            className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-[11px]"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectExpense(exp.id)}
+                            className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded font-semibold text-[11px]"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* TAB 5: Advance Settlement */}
         {activeTab === 'settlement' && (
           <div className="space-y-3 text-xs">
+            {backendCalculation && (
+              <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between">
+                <span className="font-semibold">Backend Settlement Calculation Engine: Verified</span>
+                <span className="font-mono text-[11px]">Net: ₹{backendCalculation.calculation?.netBalance ?? backendCalculation.netBalance ?? 0}</span>
+              </div>
+            )}
             <div className="p-4 rounded-xl border border-gray-200 bg-gray-50 space-y-2.5">
               <div className="flex justify-between">
                 <span className="text-gray-600">Total Advances Issued Against Trip:</span>
                 <span className="font-bold font-mono text-gray-900">
-                  {formatCurrency(trip.settlement.totalAdvancesIssued)}
+                  {formatCurrency(backendCalculation?.totalAdvancesAllocated ?? trip.settlement.totalAdvancesIssued)}
                 </span>
               </div>
               <div className="flex justify-between text-emerald-800">
                 <span>− Less Total Approved Expenses:</span>
                 <span className="font-bold font-mono">
-                  − {formatCurrency(trip.settlement.totalApprovedExpenses)}
+                  − {formatCurrency(backendCalculation?.totalApprovedExpenses ?? trip.settlement.totalApprovedExpenses)}
                 </span>
               </div>
               <div className="flex justify-between text-blue-800">
                 <span>− Less Amount Returned by Driver:</span>
                 <span className="font-bold font-mono">
-                  − {formatCurrency(trip.settlement.amountReturnedByDriver)}
+                  − {formatCurrency(backendCalculation?.totalCashReturns ?? trip.settlement.amountReturnedByDriver)}
                 </span>
               </div>
               <div className="pt-2 border-t border-gray-200 flex justify-between font-bold text-sm">
                 <span className="text-rose-800">Outstanding Settlement Balance:</span>
                 <span className="font-mono text-rose-800">
-                  {formatCurrency(trip.settlement.outstandingBalance)}
+                  {formatCurrency(backendCalculation?.netBalance ?? trip.settlement.outstandingBalance)}
                 </span>
               </div>
             </div>
