@@ -11,6 +11,9 @@ import { advanceRouter } from './modules/advances/advance.routes.js';
 import { expenseRouter } from './modules/expenses/expense.routes.js';
 import { settlementRouter } from './modules/settlement/settlement.routes.js';
 import { vehicleRouter } from './modules/vehicles/vehicle.routes.js';
+import { salaryStructureRouter } from './modules/salary-structures/salary-structure.routes.js';
+import { payrollRouter } from './modules/payroll/payroll.routes.js';
+import { integrationJobRouter } from './modules/integrations/integration-job.routes.js';
 import { bataPolicyService } from './modules/bata/bata-policy.service.js';
 import { AppError } from './shared/errors/index.js';
 import { prisma } from './shared/database/prisma.js';
@@ -64,6 +67,9 @@ app.use('/api/v1/fuel-deductions', fuelDeductionRouter);
 app.use('/api/v1/advances', advanceRouter);
 app.use('/api/v1/expenses', expenseRouter);
 app.use('/api/v1/settlements', settlementRouter);
+app.use('/api/v1/salary-structures', salaryStructureRouter);
+app.use('/api/v1/payroll', payrollRouter);
+app.use('/api/v1/integration-jobs', integrationJobRouter);
 
 app.get('/api/v1/bata/status', (_req: Request, res: Response) => {
   res.status(200).json({

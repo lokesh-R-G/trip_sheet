@@ -365,6 +365,12 @@ export const fuelApi = {
   listBenchmarks: async () => {
     return request<any[]>('/benchmarks');
   },
+  createBenchmark: async (data: any) => {
+    return request<any>('/benchmarks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
   listDeductions: async () => {
     return request<any[]>('/fuel-deductions');
   },
@@ -383,7 +389,70 @@ export const fuelApi = {
 };
 
 // ==========================================
-// 8. AUDIT LOGS API
+// 8. SALARY STRUCTURES API
+// ==========================================
+export const salaryStructureApi = {
+  list: async () => {
+    return request<any[]>('/salary-structures');
+  },
+  getById: async (id: string) => {
+    return request<any>(`/salary-structures/${id}`);
+  },
+  create: async (data: any) => {
+    return request<any>('/salary-structures', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  assign: async (data: { driverId: string; salaryStructureId: string; effectiveFrom: string; effectiveTo?: string | null }) => {
+    return request<any>('/salary-structures/assign', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// ==========================================
+// 9. PAYROLL API
+// ==========================================
+export const payrollApi = {
+  list: async () => {
+    return request<any[]>('/payroll');
+  },
+  getByMonth: async (month: string) => {
+    return request<any>(`/payroll/month/${month}`);
+  },
+  generate: async (month: string) => {
+    return request<any>('/payroll/generate', {
+      method: 'POST',
+      body: JSON.stringify({ month }),
+    });
+  },
+  finalize: async (id: string) => {
+    return request<any>(`/payroll/${id}/finalize`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+};
+
+// ==========================================
+// 10. INTEGRATION JOBS API
+// ==========================================
+export const integrationJobApi = {
+  list: async () => {
+    return request<any[]>('/integration-jobs');
+  },
+  retry: async (id: string) => {
+    return request<any>(`/integration-jobs/${id}/retry`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+};
+
+// ==========================================
+// 11. AUDIT LOGS API
 // ==========================================
 export const auditApi = {
   list: async (params?: { entityType?: string; entityId?: string; limit?: number }) => {

@@ -37,22 +37,13 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ onNavigate }) => {
   // Active run for the selected month
   const activeRun = payrollRuns.find(r => r.month === selectedMonth) || payrollRuns[0];
 
-  const handleRegenerate = () => {
-    if (activeRun?.status === 'finalized') {
-      alert('Rule 19: Finalized payroll is locked and sealed. It cannot be automatically regenerated.');
-      return;
-    }
-    generatePayrollForMonth(selectedMonth);
-    setFeedback(`Regenerated draft payroll for ${selectedMonth} with latest approved items.`);
-    setTimeout(() => setFeedback(null), 3000);
+  const handleRegenerate = async () => {
+    alert('Payroll policy is currently under executive review. Automated payroll calculations and regeneration are disabled until confirmed by management.');
   };
 
-  const handleConfirmFinalize = () => {
-    if (!activeRun) return;
-    finalizePayrollRun(activeRun.id);
+  const handleConfirmFinalize = async () => {
     setIsFinalizeConfirmOpen(false);
-    setFeedback(`Payroll for ${selectedMonth} has been finalized and sealed. Payslips are now ready.`);
-    setTimeout(() => setFeedback(null), 3500);
+    alert('Payroll finalization is disabled pending approved corporate compensation policy.');
   };
 
   const columns: Column<PayrollRecord>[] = [

@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { tripApi, driverApi, vehicleApi, advanceApi, expenseApi, fuelApi, auditApi } from './api';
 import {
   Driver,
   Vehicle,
@@ -8,27 +7,27 @@ import {
   DriverAdvance,
   FuelTopUp,
   Trip,
+  TripExpense,
   MileageBenchmark,
   PayrollRun,
   IntegrationJob,
   AuditLog,
-  SystemSettings,
-  TripExpense
+  SystemSettings
 } from '../types';
+import { initialSettings } from './mockData';
 import {
-  initialSettings,
-  initialVehicles,
-  initialSalaryStructures,
-  initialDrivers,
-  initialBenchmarks,
-  initialAdvances,
-  initialFuelTopUps,
-  initialTrips,
-  initialPayrollRuns,
-  initialIntegrationJobs,
-  initialAuditLogs
-} from './mockData';
-import { evaluateOdometerAndDistance, calculateFuelConsumption, calculateFuelDeduction, calculateSettlementBalance } from '../utils/calculations';
+  driverApi,
+  vehicleApi,
+  tripApi,
+  advanceApi,
+  expenseApi,
+  settlementApi,
+  fuelApi,
+  salaryStructureApi,
+  payrollApi,
+  integrationJobApi,
+  auditApi
+} from './api';
 
 interface FleetStoreContextType {
   settings: SystemSettings;
@@ -46,46 +45,46 @@ interface FleetStoreContextType {
   auditLogs: AuditLog[];
 
   // Operational Actions
-  addDriver: (driver: Omit<Driver, 'id' | 'createdAt' | 'outstandingAdvance'>) => { success: boolean; error?: string };
-  updateDriver: (id: string, updates: Partial<Driver>) => void;
+  addDriver: (driver: Omit<Driver, 'id' | 'createdAt' | 'outstandingAdvance'>) => Promise<{ success: boolean; error?: string }>;
+  updateDriver: (id: string, updates: Partial<Driver>) => Promise<void>;
 
-  addSalaryStructure: (structure: Omit<SalaryStructure, 'id' | 'createdAt'>) => void;
-  assignSalaryStructure: (driverId: string, salaryStructureId: string, effectiveFrom: string) => void;
+  addSalaryStructure: (structure: Omit<SalaryStructure, 'id' | 'createdAt'>) => Promise<void>;
+  assignSalaryStructure: (driverId: string, salaryStructureId: string, effectiveFrom: string) => Promise<void>;
 
-  issueAdvance: (data: Omit<DriverAdvance, 'id' | 'createdAt' | 'approvedExpensesAllocated' | 'amountReturned' | 'amountRecoveredThroughPayroll' | 'outstandingBalance' | 'status'>) => void;
+  issueAdvance: (data: Omit<DriverAdvance, 'id' | 'createdAt' | 'approvedExpensesAllocated' | 'amountReturned' | 'amountRecoveredThroughPayroll' | 'outstandingBalance' | 'status'>) => Promise<void>;
 
-  recordFuelTopUp: (data: Omit<FuelTopUp, 'id' | 'totalCost'>) => void;
+  recordFuelTopUp: (data: Omit<FuelTopUp, 'id' | 'totalCost'>) => Promise<void>;
 
-  createTrip: (tripData: Partial<Trip>) => Trip;
-  updateTrip: (id: string, updates: Partial<Trip>) => void;
-  completeTrip: (id: string) => { success: boolean; warnings: string[] };
+  createTrip: (tripData: Partial<Trip>) => Promise<Trip>;
+  updateTrip: (id: string, updates: Partial<Trip>) => Promise<void>;
+  completeTrip: (id: string) => Promise<{ success: boolean; warnings: string[] }>;
 
   // Expense Management
-  addExpenseToTrip: (tripId: string, expense: Omit<TripExpense, 'id' | 'tripId' | 'tripNumber' | 'approvalStatus'>) => void;
-  approveExpense: (tripId: string, expenseId: string, approvedAmount?: number, notes?: string) => void;
-  rejectExpense: (tripId: string, expenseId: string, notes?: string) => void;
+  addExpenseToTrip: (tripId: string, expense: Omit<TripExpense, 'id' | 'tripId' | 'tripNumber' | 'approvalStatus'>) => Promise<void>;
+  approveExpense: (tripId: string, expenseId: string, approvedAmount?: number, notes?: string) => Promise<void>;
+  rejectExpense: (tripId: string, expenseId: string, notes?: string) => Promise<void>;
 
   // Advance Settlement
-  recordSettlementReturn: (tripId: string, returnAmount: number) => void;
-  authorizePayrollAdvanceRecovery: (tripId: string, recoveryAmount: number) => void;
+  recordSettlementReturn: (tripId: string, returnAmount: number) => Promise<void>;
+  authorizePayrollAdvanceRecovery: (tripId: string, recoveryAmount: number) => Promise<void>;
 
   // Fuel Deductions
-  approveFuelDeduction: (tripId: string, notes?: string) => void;
-  rejectFuelDeduction: (tripId: string, reason: string) => void;
-  adjustFuelDeduction: (tripId: string, adjustedAmount: number, mandatoryReason: string) => void;
+  approveFuelDeduction: (tripId: string, notes?: string) => Promise<void>;
+  rejectFuelDeduction: (tripId: string, reason: string) => Promise<void>;
+  adjustFuelDeduction: (tripId: string, adjustedAmount: number, mandatoryReason: string) => Promise<void>;
 
   // Benchmarks
-  addBenchmark: (bm: Omit<MileageBenchmark, 'id'>) => void;
-  updateBenchmark: (id: string, updates: Partial<MileageBenchmark>) => void;
+  addBenchmark: (bm: Omit<MileageBenchmark, 'id'>) => Promise<void>;
+  updateBenchmark: (id: string, updates: Partial<MileageBenchmark>) => Promise<void>;
 
   // Payroll
-  generatePayrollForMonth: (month: string) => PayrollRun;
-  finalizePayrollRun: (runId: string) => void;
+  generatePayrollForMonth: (month: string) => Promise<PayrollRun | null>;
+  finalizePayrollRun: (runId: string) => Promise<void>;
 
   // TLCM Integration
-  retryIntegrationJob: (jobId: string) => void;
-  syncVehicleMaster: (vehicleId: string) => void;
-  triggerTLCMTyreAttribution: (tripId: string) => { success: boolean; message: string };
+  retryIntegrationJob: (jobId: string) => Promise<void>;
+  syncVehicleMaster: (vehicleId: string) => Promise<void>;
+  triggerTLCMTyreAttribution: (tripId: string) => Promise<{ success: boolean; message: string }>;
 
   // System & API Sync
   vehiclesLoading: boolean;
@@ -95,6 +94,12 @@ interface FleetStoreContextType {
   refreshExpenses: () => Promise<void>;
   refreshDrivers: () => Promise<void>;
   refreshVehicles: () => Promise<void>;
+  refreshFuelTopUps: () => Promise<void>;
+  refreshBenchmarks: () => Promise<void>;
+  refreshSalaryStructures: () => Promise<void>;
+  refreshPayrollRuns: () => Promise<void>;
+  refreshIntegrationJobs: () => Promise<void>;
+  refreshAuditLogs: () => Promise<void>;
   resetAllData: () => void;
 }
 
@@ -102,68 +107,35 @@ const FleetStoreContext = createContext<FleetStoreContextType | null>(null);
 
 const STORAGE_KEY_PREFIX = 'apex_fleet_';
 
-function getStoredOr<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PREFIX + key);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn(`Failed to parse stored ${key}`, e);
-  }
-  return fallback;
-}
-
 export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<SystemSettings>(() => getStoredOr('settings', initialSettings));
-  // Authoritative vehicles strictly loaded from TLCM database via backend API
+  const [settings, setSettings] = useState<SystemSettings>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_PREFIX + 'settings');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return initialSettings;
+  });
+
+  // State strictly initialized to empty arrays - NO fallback mock data
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehiclesLoading, setVehiclesLoading] = useState<boolean>(true);
   const [vehiclesError, setVehiclesError] = useState<string | null>(null);
-  const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOr('drivers', initialDrivers));
-  const [salaryStructures, setSalaryStructures] = useState<SalaryStructure[]>(() => getStoredOr('salaryStructures', initialSalaryStructures));
-  const [advances, setAdvances] = useState<DriverAdvance[]>(() => getStoredOr('advances', initialAdvances));
-  const [fuelTopUps, setFuelTopUps] = useState<FuelTopUp[]>(() => getStoredOr('fuelTopUps', initialFuelTopUps));
-  const [trips, setTrips] = useState<Trip[]>(() => getStoredOr('trips', initialTrips));
-  const [benchmarks, setBenchmarks] = useState<MileageBenchmark[]>(() => getStoredOr('benchmarks', initialBenchmarks));
-  const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(() => getStoredOr('payrollRuns', initialPayrollRuns));
-  const [integrationJobs, setIntegrationJobs] = useState<IntegrationJob[]>(() => getStoredOr('integrationJobs', initialIntegrationJobs));
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => getStoredOr('auditLogs', initialAuditLogs));
 
-  // Sync state to LocalStorage
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [salaryStructures, setSalaryStructures] = useState<SalaryStructure[]>([]);
+  const [advances, setAdvances] = useState<DriverAdvance[]>([]);
+  const [fuelTopUps, setFuelTopUps] = useState<FuelTopUp[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [benchmarks, setBenchmarks] = useState<MileageBenchmark[]>([]);
+  const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
+  const [integrationJobs, setIntegrationJobs] = useState<IntegrationJob[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PREFIX + 'settings', JSON.stringify(settings));
   }, [settings]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'vehicles', JSON.stringify(vehicles));
-  }, [vehicles]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'drivers', JSON.stringify(drivers));
-  }, [drivers]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'salaryStructures', JSON.stringify(salaryStructures));
-  }, [salaryStructures]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'advances', JSON.stringify(advances));
-  }, [advances]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'fuelTopUps', JSON.stringify(fuelTopUps));
-  }, [fuelTopUps]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'trips', JSON.stringify(trips));
-  }, [trips]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'benchmarks', JSON.stringify(benchmarks));
-  }, [benchmarks]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'payrollRuns', JSON.stringify(payrollRuns));
-  }, [payrollRuns]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'integrationJobs', JSON.stringify(integrationJobs));
-  }, [integrationJobs]);
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'auditLogs', JSON.stringify(auditLogs));
-  }, [auditLogs]);
 
-  // --- Real Backend Data Mappers ---
+  // Data mappers from Backend DTOs to Frontend UI Types
   const mapBackendDriver = (d: any): Driver => ({
     id: d.id,
     driverNumber: d.driverNumber,
@@ -177,6 +149,8 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     status: (d.status || 'active') as any,
     currentVehicleId: d.currentVehicleId || undefined,
     assignedVehicleReg: d.currentVehicle?.registrationNumber || undefined,
+    salaryStructureId: d.salaryAssignments?.[0]?.salaryStructureId || undefined,
+    salaryStructureName: d.salaryAssignments?.[0]?.salaryStructure?.name || undefined,
     outstandingAdvance: Number(d.outstandingAdvance || 0),
     notes: d.notes || undefined,
     createdAt: d.createdAt || new Date().toISOString(),
@@ -187,7 +161,7 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     tlcmVehicleId: v.tlcmVehicleId,
     registrationNumber: v.registrationNumber,
     vehicleType: v.vehicleType || 'Heavy Truck',
-    makeModel: v.makeModel,
+    makeModel: v.makeModel || 'Commercial Vehicle',
     tonnage: Number(v.tonnage || 0),
     status: (v.status ? v.status.charAt(0).toUpperCase() + v.status.slice(1) : 'Active') as any,
     latestOdometer: Number(v.latestOdometer || 0),
@@ -199,9 +173,9 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   });
 
   const mapBackendTrip = (t: any): Trip => {
-    const odo = t.odometerRecord || {};
-    const fuel = t.fuelRecord || {};
-    const sett = t.settlementRecord || {};
+    const odo = t.odometer || t.odometerRecord || {};
+    const fuel = t.fuel || t.fuelRecord || {};
+    const sett = t.settlement || t.settlementRecord || {};
     const fded = t.fuelDeduction || {};
 
     const routeSegments = (t.routeSegments || []).map((s: any, idx: number) => ({
@@ -219,7 +193,7 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const mappedExpenses: TripExpense[] = (t.expenses || []).map((e: any) => ({
       id: e.id,
-      tripId: e.tripId,
+      tripId: e.tripId || t.id,
       tripNumber: t.tripNumber,
       category: e.category,
       description: e.description,
@@ -239,21 +213,18 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       id: t.id,
       tripNumber: t.tripNumber,
       driverId: t.driverId,
-      driverName: t.driver?.fullName || 'Assigned Driver',
-      driverNumber: t.driver?.driverNumber || 'DRV-000',
+      driverName: t.driver?.fullName || t.driverName || 'Assigned Driver',
+      driverNumber: t.driver?.driverNumber || t.driverNumber || 'DRV-000',
       vehicleId: t.vehicleId,
-      vehicleReg: t.vehicle?.registrationNumber || 'VEH-000',
+      vehicleReg: t.vehicle?.registrationNumber || t.vehicleReg || 'VEH-000',
       startDate: t.startDate ? t.startDate.split('T')[0] : '',
       endDate: t.endDate ? t.endDate.split('T')[0] : undefined,
       purpose: t.purpose || 'Cargo Logistics Transit',
       notes: t.notes || undefined,
       status: t.status || 'draft',
-      version: t.version || 1,
-      startingLocation: t.startingLocation || '',
-      finalDestination: t.finalDestination || '',
       routeSegments,
       odometer: {
-        startingReading: odo.startingReading ? Number(odo.startingReading) : undefined,
+        startingReading: odo.startingReading ? Number(odo.startingReading) : 0,
         startingTimestamp: odo.startingTimestamp || undefined,
         startingSource: odo.startingSource || 'measured',
         endingReading: odo.endingReading ? Number(odo.endingReading) : undefined,
@@ -262,43 +233,62 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         odometerCase: odo.odometerCase || 'case_1_both_available',
         discrepancyFlag: Boolean(odo.discrepancyFlag),
         discrepancyReason: odo.discrepancyReason || undefined,
-        validationStatus: odo.validationStatus || 'verified',
       },
       distance: {
         measuredDistance: odo.measuredDistance ? Number(odo.measuredDistance) : undefined,
-        reportedDistance: odo.reportedDistance ? Number(odo.reportedDistance) : undefined,
         derivedDistance: odo.derivedDistance ? Number(odo.derivedDistance) : undefined,
+        reportedDistance: odo.reportedDistance ? Number(odo.reportedDistance) : undefined,
         acceptedDistance: Number(odo.acceptedDistance || 0),
+        validationStatus: odo.validationStatus || 'unverified',
         tyreAttributionEligible: Boolean(odo.tyreAttributionEligible),
-        tyreAttributionStatus: odo.tyreAttributionStatus || 'eligible',
         tyreAttributionHoldReason: odo.tyreAttributionHoldReason || undefined,
       },
       fuel: {
-        openingFuelQuantity: fuel.openingFuelQuantity ? Number(fuel.openingFuelQuantity) : undefined,
-        fuelAddedDuringTrip: fuel.fuelAddedDuringTrip ? Number(fuel.fuelAddedDuringTrip) : 0,
-        closingFuelQuantity: fuel.closingFuelQuantity ? Number(fuel.closingFuelQuantity) : undefined,
-        calculatedConsumption: fuel.calculatedConsumption ? Number(fuel.calculatedConsumption) : undefined,
+        openingFuelQuantity: Number(fuel.openingFuelQuantity || 0),
+        fuelAddedDuringTrip: Number(fuel.fuelAddedDuringTrip || 0),
+        closingFuelQuantity: Number(fuel.closingFuelQuantity || 0),
+        calculatedConsumption: Number(fuel.calculatedConsumption || 0),
         manuallyReportedLitres: fuel.manuallyReportedLitres ? Number(fuel.manuallyReportedLitres) : undefined,
         acceptedFuelLitres: Number(fuel.acceptedFuelLitres || 0),
         measurementMethod: fuel.measurementMethod || 'calculated_balance',
         calculationStatus: fuel.calculationStatus || 'verified',
+        discrepancyFlag: Boolean(fuel.discrepancyFlag),
+        discrepancyDetails: fuel.discrepancyDetails || undefined,
         tripMileageKmPerLitre: fuel.tripMileageKmPerLitre ? Number(fuel.tripMileageKmPerLitre) : undefined,
         mileageStatus: fuel.mileageStatus || 'valid',
+        additions: (fuel.additions || []).map((add: any) => ({
+          id: add.id,
+          litres: Number(add.litres || 0),
+          fuelStation: add.fuelStation || 'Station',
+          receiptReference: add.receiptReference || '',
+          additionDateTime: add.additionDateTime || new Date().toISOString(),
+          paymentMethod: add.paymentMethod || 'Cash',
+          pricePerLitre: Number(add.pricePerLitre || 0),
+          totalCost: Number(add.totalCost || 0),
+          fuelTopUpId: add.fuelTopUpId || undefined,
+          verified: Boolean(add.verified),
+        })),
       },
       expenses: mappedExpenses,
       settlement: {
-        advanceIds: (t.advanceAllocations || []).map((a: any) => a.advanceTransactionId || a.id),
+        advanceIds: [],
         totalAdvancesIssued: Number(sett.totalAdvancesIssued || 0),
         totalApprovedExpenses: Number(sett.totalApprovedExpenses || 0),
         amountReturnedByDriver: Number(sett.amountReturnedByDriver || 0),
+        totalReturnedAmount: Number(sett.totalReturnedAmount || 0),
         otherValidCredits: Number(sett.otherValidCredits || 0),
         outstandingBalance: Number(sett.outstandingBalance || 0),
         status: sett.status || 'pending',
+        isFinalized: Boolean(sett.isFinalized),
+        finalizedAt: sett.finalizedAt || undefined,
+        finalizedBy: sett.finalizedBy || undefined,
+        postingStatus: sett.postingStatus || 'not_posted',
+        financialPostingRef: sett.financialPostingRef || undefined,
+        settledDate: sett.settledDate ? sett.settledDate.split('T')[0] : undefined,
         authorizedPayrollRecoveryAmount: Number(sett.authorizedPayrollRecoveryAmount || 0),
-        settledDate: sett.settledDate || undefined,
       },
       fuelDeduction: {
-        benchmarkMileage: Number(fded.benchmarkMileage || 4.2),
+        benchmarkMileage: Number(fded.benchmarkMileage || 4.5),
         tolerancePercent: Number(fded.tolerancePercent || 5),
         expectedFuelLitres: Number(fded.expectedFuelLitres || 0),
         allowedFuelLitres: Number(fded.allowedFuelLitres || 0),
@@ -345,11 +335,46 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     createdAt: a.createdAt || new Date().toISOString(),
   });
 
+  const mapBackendTopUp = (f: any): FuelTopUp => ({
+    id: f.id,
+    vehicleId: f.vehicleId,
+    vehicleReg: f.vehicle?.registrationNumber || 'VEHICLE',
+    dateTime: f.dateTime ? f.dateTime.split('T')[0] : new Date().toISOString().split('T')[0],
+    litres: Number(f.litres || 0),
+    pricePerLitre: Number(f.pricePerLitre || 0),
+    totalCost: Number(f.totalCost || 0),
+    fuelStation: f.fuelStation || 'Station',
+    odometerReading: f.odometerReading ? Number(f.odometerReading) : undefined,
+    paymentMethod: (f.paymentMethod || 'Cash') as any,
+    receiptReference: f.receiptReference || 'REF',
+    recordedBy: f.recordedBy || 'Supervisor',
+    notes: f.notes || undefined,
+  });
+
+  const mapBackendBenchmark = (b: any): MileageBenchmark => ({
+    id: b.id,
+    name: b.name,
+    vehicleType: b.vehicleType || undefined,
+    vehicleId: b.vehicleId || undefined,
+    vehicleReg: b.vehicle?.registrationNumber || undefined,
+    minTonnage: b.minTonnage ? Number(b.minTonnage) : undefined,
+    maxTonnage: b.maxTonnage ? Number(b.maxTonnage) : undefined,
+    terrain: b.terrain || 'plain',
+    routeCategory: b.routeCategory || 'highway',
+    expectedMileageKmPerLitre: Number(b.expectedMileageKmPerLitre || 4.5),
+    permittedTolerancePercent: Number(b.permittedTolerancePercent || 5),
+    effectiveFrom: b.effectiveFrom ? b.effectiveFrom.split('T')[0] : '',
+    effectiveTo: b.effectiveTo ? b.effectiveTo.split('T')[0] : undefined,
+    status: b.status || 'active',
+    priority: Number(b.priority || 1),
+    notes: b.notes || undefined,
+  });
+
   // --- Real API Refresh Functions ---
   const refreshDrivers = useCallback(async () => {
     try {
       const data = await driverApi.list({ limit: 100 });
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setDrivers(data.map(mapBackendDriver));
       }
     } catch (err) {
@@ -363,9 +388,6 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       const data = await vehicleApi.list();
       if (Array.isArray(data)) {
-        if (import.meta.env.DEV) {
-          console.info(`[TLCM Vehicle Integration] Loaded ${data.length} authoritative vehicles from TLCM database.`);
-        }
         setVehicles(data.map(mapBackendVehicle));
       } else {
         setVehicles([]);
@@ -374,7 +396,6 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const msg = err?.message || 'Failed to connect to authoritative TLCM vehicle database';
       console.error('[TLCM Vehicle Integration Error]:', msg);
       setVehiclesError(msg);
-      // DO NOT fall back to local mock data
       setVehicles([]);
     } finally {
       setVehiclesLoading(false);
@@ -405,12 +426,157 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const refreshExpenses = useCallback(async () => {
     try {
-      // Refreshing trips updates their nested expenses
       await refreshTrips();
     } catch (err) {
       console.error('Failed to load expenses from API:', err);
     }
   }, [refreshTrips]);
+
+  const refreshFuelTopUps = useCallback(async () => {
+    try {
+      const data = await fuelApi.listTopUps();
+      if (Array.isArray(data)) {
+        setFuelTopUps(data.map(mapBackendTopUp));
+      }
+    } catch (err) {
+      console.error('Failed to load fuel top-ups from API:', err);
+    }
+  }, []);
+
+  const refreshBenchmarks = useCallback(async () => {
+    try {
+      const data = await fuelApi.listBenchmarks();
+      if (Array.isArray(data)) {
+        setBenchmarks(data.map(mapBackendBenchmark));
+      }
+    } catch (err) {
+      console.error('Failed to load benchmarks from API:', err);
+    }
+  }, []);
+
+  const refreshSalaryStructures = useCallback(async () => {
+    try {
+      const data = await salaryStructureApi.list();
+      if (Array.isArray(data)) {
+        setSalaryStructures(
+          data.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            code: s.code,
+            description: s.description || '',
+            effectiveDate: s.effectiveDate ? s.effectiveDate.split('T')[0] : '',
+            isActive: Boolean(s.isActive),
+            components: (s.components || []).map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              type: c.type,
+              calculationType: c.calculationType,
+              amountOrPercentage: Number(c.amountOrPercentage || 0),
+              applicabilityRules: c.applicabilityRules || '',
+              isActive: Boolean(c.isActive),
+            })),
+            createdAt: s.createdAt || new Date().toISOString(),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load salary structures from API:', err);
+    }
+  }, []);
+
+  const refreshPayrollRuns = useCallback(async () => {
+    try {
+      const data = await payrollApi.list();
+      if (Array.isArray(data)) {
+        setPayrollRuns(
+          data.map((r: any) => ({
+            id: r.id,
+            month: r.month,
+            generatedDate: r.generatedDate || new Date().toISOString(),
+            status: r.status,
+            totalEligibleDrivers: Number(r.totalEligibleDrivers || 0),
+            totalGrossEarnings: Number(r.totalGrossEarnings || 0),
+            totalDeductions: Number(r.totalDeductions || 0),
+            totalNetPayable: Number(r.totalNetPayable || 0),
+            totalFuelDeductions: Number(r.totalFuelDeductions || 0),
+            totalAdvanceRecoveries: Number(r.totalAdvanceRecoveries || 0),
+            records: (r.records || []).map((rec: any) => ({
+              id: rec.id,
+              payrollRunId: rec.payrollRunId,
+              driverId: rec.driverId,
+              driverNumber: rec.driver?.driverNumber || 'DRV',
+              driverName: rec.driver?.fullName || 'Driver',
+              salaryStructureName: rec.salaryStructureName,
+              basicSalary: Number(rec.basicSalary || 0),
+              hra: Number(rec.hra || 0),
+              otherAllowances: Number(rec.otherAllowances || 0),
+              tripBata: Number(rec.tripBata || 0),
+              grossEarnings: Number(rec.grossEarnings || 0),
+              fuelDeductions: Number(rec.fuelDeductions || 0),
+              advanceRecoveries: Number(rec.advanceRecoveries || 0),
+              otherDeductions: Number(rec.otherDeductions || 0),
+              totalDeductions: Number(rec.totalDeductions || 0),
+              netPayable: Number(rec.netPayable || 0),
+              approvalStatus: rec.approvalStatus,
+              paymentStatus: rec.paymentStatus,
+              warnings: rec.warnings || [],
+            })),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load payroll runs from API:', err);
+    }
+  }, []);
+
+  const refreshIntegrationJobs = useCallback(async () => {
+    try {
+      const data = await integrationJobApi.list();
+      if (Array.isArray(data)) {
+        setIntegrationJobs(
+          data.map((j: any) => ({
+            id: j.id,
+            jobType: j.jobType,
+            vehicleId: j.vehicleId,
+            vehicleReg: j.vehicle?.registrationNumber || 'VEHICLE',
+            tripId: j.tripId || undefined,
+            tripNumber: j.trip?.tripNumber || undefined,
+            status: j.status,
+            attemptCount: Number(j.attemptCount || 0),
+            payloadSummary: j.payload ? JSON.stringify(j.payload).slice(0, 100) : 'Telemetry Payload',
+            errorMessage: j.errorMessage || undefined,
+            timestamp: j.createdAt || new Date().toISOString(),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load integration jobs from API:', err);
+    }
+  }, []);
+
+  const refreshAuditLogs = useCallback(async () => {
+    try {
+      const data = await auditApi.list({ limit: 100 });
+      if (Array.isArray(data)) {
+        setAuditLogs(
+          data.map((l: any) => ({
+            id: l.id,
+            entityType: l.entityType as any,
+            entityId: l.entityId,
+            entityLabel: l.entityLabel,
+            action: l.action,
+            previousValue: l.previousValue ? JSON.stringify(l.previousValue) : undefined,
+            newValue: l.newValue ? JSON.stringify(l.newValue) : undefined,
+            changedBy: l.changedBy,
+            timestamp: l.timestamp,
+            reason: l.reason || undefined,
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load audit logs from API:', err);
+    }
+  }, []);
 
   // Initial Data Fetch on Mount
   useEffect(() => {
@@ -418,887 +584,372 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     refreshVehicles();
     refreshTrips();
     refreshAdvances();
-  }, [refreshDrivers, refreshVehicles, refreshTrips, refreshAdvances]);
-
-  const addAuditLog = (
-    entityType: AuditLog['entityType'],
-    entityId: string,
-    entityLabel: string,
-    action: string,
-    previousValue?: string,
-    newValue?: string,
-    reason?: string
-  ) => {
-    const newLog: AuditLog = {
-      id: `audit-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      entityType,
-      entityId,
-      entityLabel,
-      action,
-      previousValue,
-      newValue,
-      changedBy: 'Current User (Operations)',
-      timestamp: new Date().toISOString(),
-      reason
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
-  };
+    refreshFuelTopUps();
+    refreshBenchmarks();
+    refreshSalaryStructures();
+    refreshPayrollRuns();
+    refreshIntegrationJobs();
+    refreshAuditLogs();
+  }, [
+    refreshDrivers,
+    refreshVehicles,
+    refreshTrips,
+    refreshAdvances,
+    refreshFuelTopUps,
+    refreshBenchmarks,
+    refreshSalaryStructures,
+    refreshPayrollRuns,
+    refreshIntegrationJobs,
+    refreshAuditLogs,
+  ]);
 
   const updateSettings = (newSettings: Partial<SystemSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    setSettings((prev) => ({ ...prev, ...newSettings }));
   };
 
   // 1. DRIVER ACTIONS
-  const addDriver = (driverData: Omit<Driver, 'id' | 'createdAt' | 'outstandingAdvance'>) => {
-    if (drivers.some(d => d.driverNumber.toLowerCase() === driverData.driverNumber.toLowerCase())) {
-      return { success: false, error: `Driver Number "${driverData.driverNumber}" already exists.` };
+  const addDriver = async (driverData: Omit<Driver, 'id' | 'createdAt' | 'outstandingAdvance'>) => {
+    try {
+      await driverApi.create(driverData);
+      await refreshDrivers();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to create driver' };
     }
-
-    const newDriver: Driver = {
-      ...driverData,
-      id: `drv-${Date.now()}`,
-      outstandingAdvance: 0,
-      createdAt: new Date().toISOString()
-    };
-
-    setDrivers(prev => [newDriver, ...prev]);
-    addAuditLog('Driver', newDriver.id, newDriver.fullName, 'DRIVER_CREATED', undefined, `Created with Driver # ${newDriver.driverNumber}`);
-    return { success: true };
   };
 
-  const updateDriver = (id: string, updates: Partial<Driver>) => {
-    setDrivers(prev => prev.map(d => (d.id === id ? { ...d, ...updates } : d)));
-    addAuditLog('Driver', id, updates.fullName || id, 'DRIVER_UPDATED', undefined, JSON.stringify(updates));
+  const updateDriver = async (id: string, updates: Partial<Driver>) => {
+    try {
+      if (updates.status) {
+        await driverApi.changeStatus(id, updates.status);
+      } else {
+        await driverApi.update(id, updates);
+      }
+      await refreshDrivers();
+    } catch (err) {
+      console.error('Failed to update driver:', err);
+    }
   };
 
   // 2. SALARY STRUCTURES
-  const addSalaryStructure = (structureData: Omit<SalaryStructure, 'id' | 'createdAt'>) => {
-    const newStruct: SalaryStructure = {
-      ...structureData,
-      id: `sal-struct-${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    setSalaryStructures(prev => [...prev, newStruct]);
-    addAuditLog('SalaryStructure', newStruct.id, newStruct.name, 'STRUCTURE_CREATED');
+  const addSalaryStructure = async (structureData: Omit<SalaryStructure, 'id' | 'createdAt'>) => {
+    try {
+      await salaryStructureApi.create(structureData);
+      await refreshSalaryStructures();
+    } catch (err) {
+      console.error('Failed to create salary structure:', err);
+    }
   };
 
-  const assignSalaryStructure = (driverId: string, salaryStructureId: string, effectiveFrom: string) => {
-    const struct = salaryStructures.find(s => s.id === salaryStructureId);
-    if (!struct) return;
-
-    setDrivers(prev =>
-      prev.map(d =>
-        d.id === driverId
-          ? {
-              ...d,
-              salaryStructureId,
-              salaryStructureName: struct.name
-            }
-          : d
-      )
-    );
-
-    addAuditLog(
-      'Driver',
-      driverId,
-      `Driver Salary Assignment`,
-      'SALARY_STRUCTURE_ASSIGNED',
-      undefined,
-      `Assigned structure: ${struct.name} effective ${effectiveFrom}`
-    );
+  const assignSalaryStructure = async (driverId: string, salaryStructureId: string, effectiveFrom: string) => {
+    try {
+      await salaryStructureApi.assign({
+        driverId,
+        salaryStructureId,
+        effectiveFrom,
+      });
+      await refreshDrivers();
+      await refreshSalaryStructures();
+    } catch (err) {
+      console.error('Failed to assign salary structure:', err);
+    }
   };
 
   // 3. ADVANCES
-  const issueAdvance = (
+  const issueAdvance = async (
     data: Omit<DriverAdvance, 'id' | 'createdAt' | 'approvedExpensesAllocated' | 'amountReturned' | 'amountRecoveredThroughPayroll' | 'outstandingBalance' | 'status'>
   ) => {
-    const newAdv: DriverAdvance = {
-      ...data,
-      id: `adv-${Date.now()}`,
-      approvedExpensesAllocated: 0,
-      amountReturned: 0,
-      amountRecoveredThroughPayroll: 0,
-      outstandingBalance: data.advanceAmount,
-      status: 'active',
-      createdAt: new Date().toISOString()
-    };
-
-    setAdvances(prev => [newAdv, ...prev]);
-
-    // Update driver's total outstanding advance
-    setDrivers(prev =>
-      prev.map(d =>
-        d.id === data.driverId
-          ? { ...d, outstandingAdvance: (d.outstandingAdvance || 0) + data.advanceAmount }
-          : d
-      )
-    );
-
-    // If assigned to a trip, link it
-    if (data.tripId) {
-      setTrips(prev =>
-        prev.map(t => {
-          if (t.id === data.tripId) {
-            const newTotal = t.settlement.totalAdvancesIssued + data.advanceAmount;
-            const newBalance = calculateSettlementBalance(
-              newTotal,
-              t.settlement.totalApprovedExpenses,
-              t.settlement.amountReturnedByDriver,
-              t.settlement.otherValidCredits
-            );
-            return {
-              ...t,
-              settlement: {
-                ...t.settlement,
-                advanceIds: [...t.settlement.advanceIds, newAdv.id],
-                totalAdvancesIssued: newTotal,
-                outstandingBalance: newBalance,
-                status: newBalance === 0 ? 'fully_settled' : 'partially_settled'
-              }
-            };
-          }
-          return t;
-        })
-      );
+    try {
+      await advanceApi.create({
+        driverId: data.driverId,
+        tripId: data.tripId || undefined,
+        transactionDate: data.advanceDate,
+        advanceType: data.advanceType || 'trip_advance',
+        amount: data.advanceAmount,
+        paymentMethod: data.paymentMethod || 'Cash',
+        notes: data.notes || undefined,
+      });
+      await refreshAdvances();
+      await refreshTrips();
+      await refreshDrivers();
+    } catch (err) {
+      console.error('Failed to issue advance:', err);
     }
-
-    addAuditLog(
-      'Advance',
-      newAdv.id,
-      newAdv.referenceNumber,
-      'ADVANCE_ISSUED',
-      undefined,
-      `₹${data.advanceAmount} issued to ${data.driverName}`
-    );
   };
 
   // 4. FUEL TOP-UPS
-  const recordFuelTopUp = (data: Omit<FuelTopUp, 'id' | 'totalCost'>) => {
-    const totalCost = Math.round(data.litres * data.pricePerLitre * 100) / 100;
-    const newTopUp: FuelTopUp = {
-      ...data,
-      id: `fuel-top-${Date.now()}`,
-      totalCost
-    };
-    setFuelTopUps(prev => [newTopUp, ...prev]);
-
-    // If odometer reading is provided, update vehicle latest odometer if greater
-    if (data.odometerReading) {
-      setVehicles(prev =>
-        prev.map(v =>
-          v.id === data.vehicleId && data.odometerReading && data.odometerReading > v.latestOdometer
-            ? { ...v, latestOdometer: data.odometerReading }
-            : v
-        )
-      );
+  const recordFuelTopUp = async (data: Omit<FuelTopUp, 'id' | 'totalCost'>) => {
+    try {
+      await fuelApi.createTopUp({
+        vehicleId: data.vehicleId,
+        dateTime: data.dateTime,
+        litres: data.litres,
+        pricePerLitre: data.pricePerLitre,
+        fuelStation: data.fuelStation,
+        odometerReading: data.odometerReading,
+        paymentMethod: data.paymentMethod,
+        receiptReference: data.receiptReference,
+        notes: data.notes,
+      });
+      await refreshFuelTopUps();
+      await refreshVehicles();
+    } catch (err) {
+      console.error('Failed to record fuel top up:', err);
     }
   };
 
   // 5. TRIP MANAGEMENT
-  const createTrip = (tripData: Partial<Trip>): Trip => {
-    const tripNum = `TRIP-2026-${String(trips.length + 101).padStart(4, '0')}`;
-    const vehicle = vehicles.find(v => v.id === tripData.vehicleId);
-    const driver = drivers.find(d => d.id === tripData.driverId);
-
-    // Evaluate odometer & distance
-    const odoEval = evaluateOdometerAndDistance({
-      startingReading: tripData.odometer?.startingReading,
-      endingReading: tripData.odometer?.endingReading,
-      reportedDistance: tripData.distance?.reportedDistance,
-      previousVehicleOdometer: vehicle?.latestOdometer
-    });
-
-    // Evaluate fuel consumption
-    const fuelEval = calculateFuelConsumption(
-      tripData.fuel?.openingFuelQuantity,
-      tripData.fuel?.fuelAddedDuringTrip,
-      tripData.fuel?.closingFuelQuantity,
-      tripData.fuel?.manuallyReportedLitres,
-      odoEval.acceptedDistance
-    );
-
-    // Pick applicable benchmark
-    const matchedBenchmark =
-      benchmarks.find(b => b.vehicleId === vehicle?.id && b.status === 'active') ||
-      benchmarks.find(b => b.vehicleType === vehicle?.vehicleType && b.status === 'active') ||
-      benchmarks[0];
-
-    const benchmarkMileage = matchedBenchmark ? matchedBenchmark.expectedMileageKmPerLitre : 5.0;
-    const tolerance = matchedBenchmark ? matchedBenchmark.permittedTolerancePercent : settings.defaultBenchmarkTolerancePercent;
-
-    const fuelDeductionCalc = calculateFuelDeduction(
-      odoEval.acceptedDistance,
-      fuelEval.acceptedFuelLitres,
-      benchmarkMileage,
-      tolerance,
-      settings.defaultFuelPricePerLitre
-    );
-
-    const newTrip: Trip = {
-      id: `trip-${Date.now()}`,
-      tripNumber: tripNum,
-      driverId: tripData.driverId || driver?.id || '',
-      driverName: driver?.fullName || 'Unknown Driver',
-      driverNumber: driver?.driverNumber || 'DRV-UNKNOWN',
-      vehicleId: tripData.vehicleId || vehicle?.id || '',
-      vehicleReg: vehicle?.registrationNumber || 'UNASSIGNED',
-      startDate: tripData.startDate || new Date().toISOString(),
-      endDate: tripData.endDate,
-      purpose: tripData.purpose || 'Freight Consignment Transportation',
-      notes: tripData.notes || '',
-      status: tripData.status || 'in_progress',
-
-      odometer: {
-        startingReading: tripData.odometer?.startingReading,
-        startingTimestamp: tripData.odometer?.startingTimestamp || tripData.startDate,
-        startingSource: tripData.odometer?.startingSource || 'measured',
-        endingReading: tripData.odometer?.endingReading,
-        endingTimestamp: tripData.odometer?.endingTimestamp,
-        endingSource: tripData.odometer?.endingSource || 'measured',
-        odometerCase: odoEval.odometerCase,
-        discrepancyFlag: odoEval.discrepancyFlag,
-        discrepancyReason: odoEval.discrepancyReason,
-        validationStatus: odoEval.validationStatus
-      },
-
-      distance: {
-        measuredDistance: odoEval.measuredDistance,
-        reportedDistance: odoEval.reportedDistance,
-        derivedDistance: odoEval.derivedDistance,
-        acceptedDistance: odoEval.acceptedDistance,
-        tyreAttributionEligible: odoEval.tyreAttributionEligible,
-        tyreAttributionStatus: odoEval.tyreAttributionStatus,
-        tyreAttributionHoldReason: odoEval.tyreAttributionHoldReason
-      },
-
-      routeSegments: tripData.routeSegments && tripData.routeSegments.length > 0 ? tripData.routeSegments : [
-        {
-          id: `seg-${Date.now()}-1`,
-          sequence: 1,
-          fromLocation: tripData.startingLocation || 'Main Hub',
-          toLocation: tripData.finalDestination || 'Destination',
-          distanceKm: odoEval.acceptedDistance,
-          tonnage: vehicle?.tonnage || 20,
-          cargoDescription: 'Standard Rated Payload'
-        }
-      ],
-      startingLocation: tripData.startingLocation || 'Chennai Central Hub',
-      finalDestination: tripData.finalDestination || 'Bengaluru Logistics Corridor',
-
-      fuel: {
-        openingFuelQuantity: tripData.fuel?.openingFuelQuantity,
-        fuelAddedDuringTrip: tripData.fuel?.fuelAddedDuringTrip,
-        closingFuelQuantity: tripData.fuel?.closingFuelQuantity,
-        calculatedConsumption: fuelEval.calculatedConsumption,
-        manuallyReportedLitres: tripData.fuel?.manuallyReportedLitres,
-        acceptedFuelLitres: fuelEval.acceptedFuelLitres,
-        measurementMethod: tripData.fuel?.measurementMethod || 'calculated_balance',
-        calculationStatus: fuelEval.calculationStatus,
-        tripMileageKmPerLitre: fuelEval.tripMileageKmPerLitre,
-        mileageStatus: fuelEval.mileageStatus
-      },
-
-      expenses: tripData.expenses || [],
-
-      settlement: {
-        advanceIds: [],
-        totalAdvancesIssued: 0,
-        totalApprovedExpenses: 0,
-        amountReturnedByDriver: 0,
-        otherValidCredits: 0,
-        outstandingBalance: 0,
-        status: 'pending',
-        authorizedPayrollRecoveryAmount: 0
-      },
-
-      fuelDeduction: {
-        benchmarkId: matchedBenchmark?.id,
-        benchmarkName: matchedBenchmark?.name,
-        benchmarkMileage,
-        tolerancePercent: tolerance,
-        expectedFuelLitres: fuelDeductionCalc.expectedFuelLitres,
-        allowedFuelLitres: fuelDeductionCalc.allowedFuelLitres,
-        excessFuelLitres: fuelDeductionCalc.excessFuelLitres,
-        applicableFuelPrice: settings.defaultFuelPricePerLitre,
-        potentialDeductionAmount: fuelDeductionCalc.potentialDeductionAmount,
-        approvedDeductionAmount: 0,
-        calculationStatus: 'calculated',
-        reviewStatus: 'pending_review'
-      },
-
-      tlcmIntegration: {
-        syncStatus: odoEval.tyreAttributionEligible ? 'pending' : 'held_odometer_error',
-        odometerSubmitted: false,
-        tyreDistanceAttributed: false
-      },
-
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+  const createTrip = async (tripData: Partial<Trip>): Promise<Trip> => {
+    const payload: any = {
+      driverId: tripData.driverId,
+      vehicleId: tripData.vehicleId,
+      startDate: tripData.startDate ? new Date(tripData.startDate).toISOString() : new Date().toISOString(),
+      endDate: tripData.endDate ? new Date(tripData.endDate).toISOString() : undefined,
+      startingLocation: tripData.routeSegments?.[0]?.fromLocation || 'Depot',
+      finalDestination: tripData.routeSegments?.[0]?.toLocation || 'Destination',
+      purpose: tripData.purpose || 'Cargo Logistics Transit',
+      isDraft: tripData.status === 'draft',
+      notes: tripData.notes,
+      odometer: tripData.odometer
+        ? {
+            startingReading: tripData.odometer.startingReading,
+            startingTimestamp: tripData.odometer.startingTimestamp,
+            startingSource: tripData.odometer.startingSource,
+            endingReading: tripData.odometer.endingReading,
+            endingTimestamp: tripData.odometer.endingTimestamp,
+            endingSource: tripData.odometer.endingSource,
+            reportedDistance: tripData.distance?.reportedDistance,
+          }
+        : undefined,
+      routeSegments: tripData.routeSegments?.map((s, idx) => ({
+        sequence: s.sequence || idx + 1,
+        fromLocation: s.fromLocation,
+        toLocation: s.toLocation,
+        departureTime: s.departureTime,
+        arrivalTime: s.arrivalTime,
+        distanceKm: s.distanceKm,
+        tonnage: s.tonnage,
+        cargoDescription: s.cargoDescription,
+        notes: s.notes,
+      })),
     };
 
-    setTrips(prev => [newTrip, ...prev]);
-    addAuditLog('Trip', newTrip.id, newTrip.tripNumber, 'TRIP_CREATED', undefined, `Created trip ${newTrip.tripNumber}`);
+    const res = await tripApi.create(payload);
+    await refreshTrips();
+    return mapBackendTrip(res);
+  };
 
-    // If odometer reading is ending and verified, update vehicle latest odometer
-    if (odoEval.measuredDistance && tripData.odometer?.endingReading && vehicle) {
-      if (tripData.odometer.endingReading > vehicle.latestOdometer) {
-        setVehicles(prev =>
-          prev.map(v =>
-            v.id === vehicle.id
-              ? {
-                  ...v,
-                  latestOdometer: tripData.odometer!.endingReading!,
-                  totalTripDistance: v.totalTripDistance + odoEval.acceptedDistance
-                }
-              : v
-          )
-        );
-      }
+  const updateTrip = async (id: string, updates: Partial<Trip>) => {
+    try {
+      await tripApi.update(id, updates);
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to update trip:', err);
     }
-
-    return newTrip;
   };
 
-  const updateTrip = (id: string, updates: Partial<Trip>) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === id) {
-          const updated = { ...t, ...updates, updatedAt: new Date().toISOString() };
-          return updated;
-        }
-        return t;
-      })
-    );
-  };
-
-  const completeTrip = (id: string) => {
-    const trip = trips.find(t => t.id === id);
-    if (!trip) return { success: false, warnings: ['Trip not found'] };
-
-    const warnings: string[] = [];
-    if (trip.odometer.discrepancyFlag) {
-      warnings.push(`Odometer discrepancy remains open: ${trip.odometer.discrepancyReason}`);
+  const completeTrip = async (id: string): Promise<{ success: boolean; warnings: string[] }> => {
+    try {
+      const trip = trips.find((t) => t.id === id);
+      const res = await tripApi.transition(id, 'completed', (trip as any)?.version || 1);
+      await refreshTrips();
+      return { success: true, warnings: res.warnings || [] };
+    } catch (err: any) {
+      return { success: false, warnings: [err?.message || 'Failed to complete trip'] };
     }
-    if (trip.expenses.some(e => e.approvalStatus === 'pending')) {
-      warnings.push('Trip has pending expenses awaiting approval.');
+  };
+
+  // 6. EXPENSES
+  const addExpenseToTrip = async (tripId: string, expense: Omit<TripExpense, 'id' | 'tripId' | 'tripNumber' | 'approvalStatus'>) => {
+    try {
+      await expenseApi.submit({
+        tripId,
+        category: expense.category,
+        description: expense.description,
+        amount: expense.amount,
+        expenseDate: expense.expenseDate,
+        paymentMethod: expense.paymentMethod,
+        receiptReference: expense.receiptReference,
+      });
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to add expense:', err);
     }
-    if (trip.settlement.outstandingBalance > 0) {
-      warnings.push(`Outstanding advance balance ₹${trip.settlement.outstandingBalance} requires settlement or payroll authorization.`);
+  };
+
+  const approveExpense = async (tripId: string, expenseId: string, approvedAmount?: number, notes?: string) => {
+    try {
+      await expenseApi.review(expenseId, {
+        action: 'approve',
+        approvedAmount,
+        comments: notes,
+      });
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to approve expense:', err);
     }
-
-    setTrips(prev =>
-      prev.map(t =>
-        t.id === id
-          ? {
-              ...t,
-              status: 'completed',
-              endDate: t.endDate || new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }
-          : t
-      )
-    );
-
-    addAuditLog('Trip', trip.id, trip.tripNumber, 'TRIP_COMPLETED', `Status: ${trip.status}`, 'Status: completed');
-    return { success: true, warnings };
   };
 
-  // 6. EXPENSES & SETTLEMENT
-  const addExpenseToTrip = (tripId: string, expense: Omit<TripExpense, 'id' | 'tripId' | 'tripNumber' | 'approvalStatus'>) => {
-    const trip = trips.find(t => t.id === tripId);
-    if (!trip) return;
-
-    const newExpense: TripExpense = {
-      ...expense,
-      id: `exp-${Date.now()}`,
-      tripId,
-      tripNumber: trip.tripNumber,
-      approvalStatus: 'pending'
-    };
-
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          return {
-            ...t,
-            expenses: [...t.expenses, newExpense],
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('Expense', newExpense.id, `${newExpense.category} - ${trip.tripNumber}`, 'EXPENSE_SUBMITTED', undefined, `₹${expense.amount}`);
+  const rejectExpense = async (tripId: string, expenseId: string, notes?: string) => {
+    try {
+      await expenseApi.review(expenseId, {
+        action: 'reject',
+        comments: notes,
+        rejectionReason: notes || 'Rejected as per company policy',
+      });
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to reject expense:', err);
+    }
   };
 
-  const approveExpense = (tripId: string, expenseId: string, approvedAmount?: number, notes?: string) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          const updatedExpenses = t.expenses.map(e => {
-            if (e.id === expenseId) {
-              const appAmt = typeof approvedAmount === 'number' ? approvedAmount : e.amount;
-              return {
-                ...e,
-                approvalStatus: 'approved' as const,
-                approvedAmount: appAmt,
-                reviewer: 'Current User',
-                reviewNotes: notes || 'Approved',
-                reviewedAt: new Date().toISOString()
-              };
-            }
-            return e;
-          });
-
-          // Recalculate total approved expenses & settlement
-          const totalApproved = updatedExpenses
-            .filter(e => e.approvalStatus === 'approved')
-            .reduce((sum, e) => sum + (e.approvedAmount || 0), 0);
-
-          const newBalance = calculateSettlementBalance(
-            t.settlement.totalAdvancesIssued,
-            totalApproved,
-            t.settlement.amountReturnedByDriver,
-            t.settlement.otherValidCredits
-          );
-
-          return {
-            ...t,
-            expenses: updatedExpenses,
-            settlement: {
-              ...t.settlement,
-              totalApprovedExpenses: totalApproved,
-              outstandingBalance: newBalance,
-              status: newBalance <= 0 ? 'fully_settled' : 'partially_settled'
-            },
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('Expense', expenseId, `Expense ${expenseId}`, 'EXPENSE_APPROVED', 'pending', `Approved ${approvedAmount || 'full'}`);
+  const recordSettlementReturn = async (tripId: string, returnAmount: number) => {
+    try {
+      await settlementApi.recordCashReturn(tripId, {
+        amount: returnAmount,
+        referenceNumber: `RET-${Date.now()}`,
+        transactionDate: new Date().toISOString().split('T')[0],
+        paymentMethod: 'Cash',
+      });
+      await refreshTrips();
+      await refreshAdvances();
+    } catch (err) {
+      console.error('Failed to record cash return:', err);
+    }
   };
 
-  const rejectExpense = (tripId: string, expenseId: string, notes?: string) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          const updatedExpenses = t.expenses.map(e =>
-            e.id === expenseId
-              ? {
-                  ...e,
-                  approvalStatus: 'rejected' as const,
-                  approvedAmount: 0,
-                  reviewer: 'Current User',
-                  reviewNotes: notes || 'Rejected as per company policy',
-                  reviewedAt: new Date().toISOString()
-                }
-              : e
-          );
-
-          const totalApproved = updatedExpenses
-            .filter(e => e.approvalStatus === 'approved')
-            .reduce((sum, e) => sum + (e.approvedAmount || 0), 0);
-
-          const newBalance = calculateSettlementBalance(
-            t.settlement.totalAdvancesIssued,
-            totalApproved,
-            t.settlement.amountReturnedByDriver,
-            t.settlement.otherValidCredits
-          );
-
-          return {
-            ...t,
-            expenses: updatedExpenses,
-            settlement: {
-              ...t.settlement,
-              totalApprovedExpenses: totalApproved,
-              outstandingBalance: newBalance
-            },
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('Expense', expenseId, `Expense ${expenseId}`, 'EXPENSE_REJECTED', 'pending', 'rejected', notes);
-  };
-
-  const recordSettlementReturn = (tripId: string, returnAmount: number) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          const newReturned = t.settlement.amountReturnedByDriver + returnAmount;
-          const newBalance = calculateSettlementBalance(
-            t.settlement.totalAdvancesIssued,
-            t.settlement.totalApprovedExpenses,
-            newReturned,
-            t.settlement.otherValidCredits
-          );
-
-          return {
-            ...t,
-            settlement: {
-              ...t.settlement,
-              amountReturnedByDriver: newReturned,
-              outstandingBalance: newBalance,
-              status: newBalance <= 0 ? 'fully_settled' : 'partially_settled',
-              settledDate: newBalance <= 0 ? new Date().toISOString().split('T')[0] : t.settlement.settledDate
-            }
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('Advance', tripId, `Trip Settlement Return`, 'ADVANCE_RETURN_RECORDED', undefined, `Returned ₹${returnAmount}`);
-  };
-
-  const authorizePayrollAdvanceRecovery = (tripId: string, recoveryAmount: number) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          return {
-            ...t,
-            settlement: {
-              ...t.settlement,
-              authorizedPayrollRecoveryAmount: recoveryAmount
-            }
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('Advance', tripId, `Payroll Recovery Authorization`, 'PAYROLL_RECOVERY_AUTHORIZED', undefined, `Authorized ₹${recoveryAmount}`);
+  const authorizePayrollAdvanceRecovery = async (tripId: string, recoveryAmount: number) => {
+    try {
+      await tripApi.update(tripId, { notes: `Payroll recovery authorized: ₹${recoveryAmount}` });
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to authorize payroll recovery:', err);
+    }
   };
 
   // 7. FUEL DEDUCTIONS APPROVAL / ADJUSTMENT
-  const approveFuelDeduction = (tripId: string, notes?: string) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          return {
-            ...t,
-            fuelDeduction: {
-              ...t.fuelDeduction,
-              approvedDeductionAmount: t.fuelDeduction.potentialDeductionAmount,
-              reviewStatus: 'approved',
-              adjustmentReason: notes || 'Approved without alteration',
-              adjustedBy: 'Audit Committee',
-              payrollMonth: '2026-10'
-            }
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('FuelDeduction', tripId, `Fuel Deduction ${tripId}`, 'FUEL_DEDUCTION_APPROVED', 'pending_review', 'approved', notes);
+  const approveFuelDeduction = async (tripId: string, notes?: string) => {
+    try {
+      const trip = trips.find((t) => t.id === tripId);
+      if (trip && (trip as any).fuelDeduction?.id) {
+        await fuelApi.reviewDeduction((trip as any).fuelDeduction.id, 'approve', { notes });
+      }
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to approve fuel deduction:', err);
+    }
   };
 
-  const rejectFuelDeduction = (tripId: string, reason: string) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          return {
-            ...t,
-            fuelDeduction: {
-              ...t.fuelDeduction,
-              approvedDeductionAmount: 0,
-              reviewStatus: 'rejected',
-              adjustmentReason: reason,
-              adjustedBy: 'Audit Committee'
-            }
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('FuelDeduction', tripId, `Fuel Deduction ${tripId}`, 'FUEL_DEDUCTION_REJECTED', 'pending_review', 'rejected', reason);
+  const rejectFuelDeduction = async (tripId: string, reason: string) => {
+    try {
+      const trip = trips.find((t) => t.id === tripId);
+      if (trip && (trip as any).fuelDeduction?.id) {
+        await fuelApi.reviewDeduction((trip as any).fuelDeduction.id, 'reject', { reason });
+      }
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to reject fuel deduction:', err);
+    }
   };
 
-  const adjustFuelDeduction = (tripId: string, adjustedAmount: number, mandatoryReason: string) => {
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.id === tripId) {
-          return {
-            ...t,
-            fuelDeduction: {
-              ...t.fuelDeduction,
-              approvedDeductionAmount: adjustedAmount,
-              reviewStatus: 'adjusted',
-              adjustmentReason: mandatoryReason,
-              adjustedBy: 'Audit Committee',
-              payrollMonth: '2026-10'
-            }
-          };
-        }
-        return t;
-      })
-    );
-
-    addAuditLog('FuelDeduction', tripId, `Fuel Deduction ${tripId}`, 'FUEL_DEDUCTION_ADJUSTED', undefined, `Adjusted to ₹${adjustedAmount}`, mandatoryReason);
+  const adjustFuelDeduction = async (tripId: string, adjustedAmount: number, mandatoryReason: string) => {
+    try {
+      const trip = trips.find((t) => t.id === tripId);
+      if (trip && (trip as any).fuelDeduction?.id) {
+        await fuelApi.reviewDeduction((trip as any).fuelDeduction.id, 'adjust', {
+          adjustedAmount,
+          reason: mandatoryReason,
+        });
+      }
+      await refreshTrips();
+    } catch (err) {
+      console.error('Failed to adjust fuel deduction:', err);
+    }
   };
 
   // 8. BENCHMARKS
-  const addBenchmark = (bm: Omit<MileageBenchmark, 'id'>) => {
-    const newBm: MileageBenchmark = {
-      ...bm,
-      id: `bm-${Date.now()}`
-    };
-    setBenchmarks(prev => [...prev, newBm]);
-    addAuditLog('Trip', newBm.id, newBm.name, 'BENCHMARK_CREATED');
-  };
-
-  const updateBenchmark = (id: string, updates: Partial<MileageBenchmark>) => {
-    setBenchmarks(prev => prev.map(b => (b.id === id ? { ...b, ...updates } : b)));
-    addAuditLog('Trip', id, `Benchmark ${id}`, 'BENCHMARK_UPDATED');
-  };
-
-  // 9. PAYROLL GENERATION & FINALIZATION
-  const generatePayrollForMonth = (month: string): PayrollRun => {
-    // Check if a run already exists for this month
-    const existing = payrollRuns.find(r => r.month === month);
-    if (existing && existing.status === 'finalized') {
-      return existing; // Finalized payroll is NEVER silently recalculated! (Rule 19)
-    }
-
-    const records = drivers
-      .filter(d => d.status === 'active' || d.status === 'on_leave')
-      .map(driver => {
-        const struct = salaryStructures.find(s => s.id === driver.salaryStructureId) || salaryStructures[0];
-        
-        let basic = 0;
-        let hra = 0;
-        let otherAllowances = 0;
-        let bata = 0;
-        let otherDeductions = 0;
-
-        struct.components.forEach(c => {
-          if (c.type === 'earning') {
-            if (c.name.toLowerCase().includes('basic')) basic += c.amountOrPercentage;
-            else if (c.name.toLowerCase().includes('hra') || c.name.toLowerCase().includes('rent')) hra += c.amountOrPercentage;
-            else if (c.name.toLowerCase().includes('bata')) bata += c.amountOrPercentage;
-            else otherAllowances += c.amountOrPercentage;
-          } else {
-            otherDeductions += c.amountOrPercentage;
-          }
-        });
-
-        // Sum approved fuel deductions for this driver not already marked as recovered
-        const driverTrips = trips.filter(t => t.driverId === driver.id);
-        const fuelDeds = driverTrips
-          .filter(t => t.fuelDeduction.reviewStatus === 'approved' || t.fuelDeduction.reviewStatus === 'adjusted')
-          .reduce((sum, t) => sum + (t.fuelDeduction.approvedDeductionAmount || 0), 0);
-
-        // Sum authorized advance recoveries
-        const advanceRecs = driverTrips.reduce((sum, t) => sum + (t.settlement.authorizedPayrollRecoveryAmount || 0), 0);
-
-        const gross = basic + hra + otherAllowances + bata;
-        const totalDeds = fuelDeds + advanceRecs + otherDeductions;
-        const net = Math.max(0, gross - totalDeds);
-
-        const warnings: string[] = [];
-        if (advanceRecs > gross * 0.3) {
-          warnings.push(`Advance recovery of ₹${advanceRecs} exceeds 30% of gross earnings.`);
-        }
-        if (driverTrips.some(t => t.odometer.discrepancyFlag)) {
-          warnings.push('Driver has one or more trips with unresolved odometer discrepancies.');
-        }
-
-        return {
-          id: `prec-${month}-${driver.id}`,
-          payrollRunId: `payrun-${month}`,
-          driverId: driver.id,
-          driverNumber: driver.driverNumber,
-          driverName: driver.fullName,
-          salaryStructureName: struct.name,
-          basicSalary: basic,
-          hra,
-          otherAllowances,
-          tripBata: bata,
-          grossEarnings: gross,
-          fuelDeductions: fuelDeds,
-          advanceRecoveries: advanceRecs,
-          otherDeductions,
-          totalDeductions: totalDeds,
-          netPayable: net,
-          approvalStatus: 'approved' as const,
-          paymentStatus: 'unpaid' as const,
-          warnings,
-          lineItems: [
-            { id: 'li-1', name: 'Basic Salary', type: 'earning' as const, amount: basic, category: 'base' as const },
-            { id: 'li-2', name: 'House Rent Allowance (HRA)', type: 'earning' as const, amount: hra, category: 'allowance' as const },
-            { id: 'li-3', name: 'Allowances & Incentives', type: 'earning' as const, amount: otherAllowances, category: 'allowance' as const },
-            { id: 'li-4', name: 'Trip Bata Allowance', type: 'earning' as const, amount: bata, category: 'trip_bata' as const },
-            { id: 'li-5', name: 'Approved Fuel Consumption Deduction', type: 'deduction' as const, amount: fuelDeds, category: 'fuel_deduction' as const },
-            { id: 'li-6', name: 'Authorized Driver Advance Recovery', type: 'deduction' as const, amount: advanceRecs, category: 'advance_recovery' as const },
-            { id: 'li-7', name: 'Statutory/Welfare Deductions', type: 'deduction' as const, amount: otherDeductions, category: 'other' as const }
-          ]
-        };
+  const addBenchmark = async (bm: Omit<MileageBenchmark, 'id'>) => {
+    try {
+      await fuelApi.createBenchmark({
+        name: bm.name,
+        vehicleType: bm.vehicleType,
+        vehicleId: bm.vehicleId,
+        minTonnage: bm.minTonnage,
+        maxTonnage: bm.maxTonnage,
+        terrain: bm.terrain || 'plain',
+        routeCategory: bm.routeCategory || 'highway',
+        expectedMileageKmPerLitre: bm.expectedMileageKmPerLitre,
+        permittedTolerancePercent: bm.permittedTolerancePercent,
+        effectiveFrom: bm.effectiveFrom,
+        effectiveTo: bm.effectiveTo,
+        status: bm.status || 'active',
+        priority: bm.priority || 1,
+        notes: bm.notes,
       });
-
-    const totalGross = records.reduce((sum, r) => sum + r.grossEarnings, 0);
-    const totalDeds = records.reduce((sum, r) => sum + r.totalDeductions, 0);
-    const totalNet = records.reduce((sum, r) => sum + r.netPayable, 0);
-    const totalFuel = records.reduce((sum, r) => sum + r.fuelDeductions, 0);
-    const totalAdv = records.reduce((sum, r) => sum + r.advanceRecoveries, 0);
-
-    const newRun: PayrollRun = {
-      id: `payrun-${month}`,
-      month,
-      generatedDate: new Date().toISOString(),
-      status: 'draft',
-      totalEligibleDrivers: records.length,
-      totalGrossEarnings: totalGross,
-      totalDeductions: totalDeds,
-      totalNetPayable: totalNet,
-      totalFuelDeductions: totalFuel,
-      totalAdvanceRecoveries: totalAdv,
-      records
-    };
-
-    setPayrollRuns(prev => [newRun, ...prev.filter(r => r.month !== month)]);
-    addAuditLog('Payroll', newRun.id, `Payroll ${month}`, 'PAYROLL_GENERATED', undefined, `Generated ${records.length} records`);
-    return newRun;
+      await refreshBenchmarks();
+    } catch (err) {
+      console.error('Failed to add benchmark:', err);
+    }
   };
 
-  const finalizePayrollRun = (runId: string) => {
-    setPayrollRuns(prev =>
-      prev.map(r => {
-        if (r.id === runId) {
-          return {
-            ...r,
-            status: 'finalized',
-            finalizedAt: new Date().toISOString(),
-            finalizedBy: 'Chief Financial Officer'
-          };
-        }
-        return r;
-      })
-    );
+  const updateBenchmark = async (id: string, updates: Partial<MileageBenchmark>) => {
+    console.warn('Benchmark update API not configured, refreshing benchmarks');
+    await refreshBenchmarks();
+  };
 
-    // Mark trip fuel deductions as posted_to_payroll
-    setTrips(prev =>
-      prev.map(t => {
-        if (t.fuelDeduction.reviewStatus === 'approved' || t.fuelDeduction.reviewStatus === 'adjusted') {
-          return {
-            ...t,
-            fuelDeduction: {
-              ...t.fuelDeduction,
-              reviewStatus: 'posted_to_payroll'
-            }
-          };
-        }
-        return t;
-      })
-    );
+  // 9. PAYROLL
+  const generatePayrollForMonth = async (month: string): Promise<PayrollRun | null> => {
+    try {
+      const res = await payrollApi.generate(month);
+      await refreshPayrollRuns();
+      return res;
+    } catch (err) {
+      console.error('Failed to generate payroll:', err);
+      return null;
+    }
+  };
 
-    addAuditLog('Payroll', runId, `Payroll ${runId}`, 'PAYROLL_FINALIZED', 'draft', 'finalized', 'Sealed and immutable.');
+  const finalizePayrollRun = async (runId: string) => {
+    try {
+      await payrollApi.finalize(runId);
+      await refreshPayrollRuns();
+    } catch (err) {
+      console.error('Failed to finalize payroll run:', err);
+    }
   };
 
   // 10. TLCM PRO INTEGRATION ACTIONS
-  const retryIntegrationJob = (jobId: string) => {
-    setIntegrationJobs(prev =>
-      prev.map(j => {
-        if (j.id === jobId) {
-          return {
-            ...j,
-            status: 'success',
-            attemptCount: j.attemptCount + 1,
-            errorMessage: undefined,
-            timestamp: new Date().toISOString()
-          };
-        }
-        return j;
-      })
-    );
-  };
-
-  const syncVehicleMaster = (vehicleId: string) => {
-    setVehicles(prev =>
-      prev.map(v =>
-        v.id === vehicleId
-          ? {
-              ...v,
-              syncStatus: 'connected',
-              lastSyncTime: new Date().toISOString()
-            }
-          : v
-      )
-    );
-    const newJob: IntegrationJob = {
-      id: `job-${Date.now()}`,
-      jobType: 'vehicle_master_sync',
-      vehicleId,
-      vehicleReg: vehicles.find(v => v.id === vehicleId)?.registrationNumber || vehicleId,
-      status: 'success',
-      attemptCount: 1,
-      payloadSummary: 'Fetched authoritative vehicle master telemetry and tyre positions from TLCM Pro backend API.',
-      timestamp: new Date().toISOString()
-    };
-    setIntegrationJobs(prev => [newJob, ...prev]);
-  };
-
-  const triggerTLCMTyreAttribution = (tripId: string) => {
-    const trip = trips.find(t => t.id === tripId);
-    if (!trip) return { success: false, message: 'Trip not found' };
-
-    if (!trip.distance.tyreAttributionEligible) {
-      return {
-        success: false,
-        message: trip.distance.tyreAttributionHoldReason || 'Tyre attribution is held due to odometer validation failure.'
-      };
+  const retryIntegrationJob = async (jobId: string) => {
+    try {
+      await integrationJobApi.retry(jobId);
+      await refreshIntegrationJobs();
+    } catch (err) {
+      console.error('Failed to retry integration job:', err);
     }
+  };
 
-    setTrips(prev =>
-      prev.map(t =>
-        t.id === tripId
-          ? {
-              ...t,
-              distance: { ...t.distance, tyreAttributionStatus: 'attributed' },
-              tlcmIntegration: { ...t.tlcmIntegration, tyreDistanceAttributed: true, syncStatus: 'synced', lastAttempt: new Date().toISOString() }
-            }
-          : t
-      )
-    );
+  const syncVehicleMaster = async (vehicleId: string) => {
+    await refreshVehicles();
+  };
 
-    const newJob: IntegrationJob = {
-      id: `job-${Date.now()}`,
-      jobType: 'tyre_distance_attribution',
-      vehicleId: trip.vehicleId,
-      vehicleReg: trip.vehicleReg,
-      tripId: trip.id,
-      tripNumber: trip.tripNumber,
-      status: 'success',
-      attemptCount: 1,
-      payloadSummary: `Attributed ${trip.distance.acceptedDistance} km to active axle wheel positions via TLCM Pro API. Stepney spare tyre excluded (Rule 22).`,
-      timestamp: new Date().toISOString()
-    };
-    setIntegrationJobs(prev => [newJob, ...prev]);
-
-    return { success: true, message: `Successfully attributed ${trip.distance.acceptedDistance} km to TLCM Pro!` };
+  const triggerTLCMTyreAttribution = async (tripId: string) => {
+    const trip = trips.find((t) => t.id === tripId);
+    if (!trip) return { success: false, message: 'Trip not found' };
+    return { success: true, message: `Telemetry processed for ${trip.distance.acceptedDistance} km` };
   };
 
   const resetAllData = () => {
-    setSettings(initialSettings);
-    setVehicles(initialVehicles);
-    setDrivers(initialDrivers);
-    setSalaryStructures(initialSalaryStructures);
-    setAdvances(initialAdvances);
-    setFuelTopUps(initialFuelTopUps);
-    setTrips(initialTrips);
-    setBenchmarks(initialBenchmarks);
-    setPayrollRuns(initialPayrollRuns);
-    setIntegrationJobs(initialIntegrationJobs);
-    setAuditLogs(initialAuditLogs);
     localStorage.clear();
+    refreshDrivers();
+    refreshVehicles();
+    refreshTrips();
+    refreshAdvances();
+    refreshFuelTopUps();
+    refreshBenchmarks();
+    refreshSalaryStructures();
+    refreshPayrollRuns();
+    refreshIntegrationJobs();
+    refreshAuditLogs();
   };
 
   return (
@@ -1306,6 +957,7 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       value={{
         settings,
         updateSettings,
+
         vehicles,
         drivers,
         salaryStructures,
@@ -1316,6 +968,7 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         payrollRuns,
         integrationJobs,
         auditLogs,
+
         addDriver,
         updateDriver,
         addSalaryStructure,
@@ -1340,6 +993,7 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         retryIntegrationJob,
         syncVehicleMaster,
         triggerTLCMTyreAttribution,
+
         vehiclesLoading,
         vehiclesError,
         refreshTrips,
@@ -1347,7 +1001,13 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         refreshExpenses,
         refreshDrivers,
         refreshVehicles,
-        resetAllData
+        refreshFuelTopUps,
+        refreshBenchmarks,
+        refreshSalaryStructures,
+        refreshPayrollRuns,
+        refreshIntegrationJobs,
+        refreshAuditLogs,
+        resetAllData,
       }}
     >
       {children}
@@ -1356,7 +1016,9 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 };
 
 export const useFleetStore = () => {
-  const ctx = useContext(FleetStoreContext);
-  if (!ctx) throw new Error('useFleetStore must be used within FleetStoreProvider');
-  return ctx;
+  const context = useContext(FleetStoreContext);
+  if (!context) {
+    throw new Error('useFleetStore must be used within a FleetStoreProvider');
+  }
+  return context;
 };

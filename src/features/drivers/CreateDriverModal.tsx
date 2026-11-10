@@ -30,7 +30,7 @@ export const CreateDriverModal: React.FC<CreateDriverModalProps> = ({
   const [notes, setNotes] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -42,7 +42,7 @@ export const CreateDriverModal: React.FC<CreateDriverModalProps> = ({
     const assignedVehicle = vehicles.find(v => v.id === assignedVehicleId);
     const assignedSalary = salaryStructures.find(s => s.id === salaryStructureId);
 
-    const result = addDriver({
+    const result = await addDriver({
       driverNumber: driverNumber.trim(),
       fullName: fullName.trim(),
       phone: phone.trim(),
