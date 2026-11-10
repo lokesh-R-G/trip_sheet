@@ -63,6 +63,7 @@ describe('Driver Attendance Module Integration Tests', () => {
     await prisma.driver.deleteMany({
       where: { id: { in: [driver1Id, driver2Id] } },
     });
+    await prisma.$disconnect();
   });
 
   it('1. Daily attendance marking API marks driver attendance successfully', async () => {

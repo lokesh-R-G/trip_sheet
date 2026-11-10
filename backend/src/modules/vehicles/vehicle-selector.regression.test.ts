@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../../app.js';
 import { prisma } from '../../shared/database/prisma.js';
 import { ExternalVehicleDatabase } from './external-vehicle.db.js';
 
 describe('Regression Tests: Vehicle Selector & Authoritative TLCM Database Ownership', () => {
+  afterAll(async () => {
+    await ExternalVehicleDatabase.disconnect();
+    await prisma.$disconnect();
+  });
   it('1. GET /api/v1/vehicles returns only authoritative TLCM vehicles, not local-only records', async () => {
     // 1. Check count of authoritative records directly in TLCM database
     const tlcmClient = ExternalVehicleDatabase.getClient();

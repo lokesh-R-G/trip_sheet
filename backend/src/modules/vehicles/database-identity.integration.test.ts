@@ -5,6 +5,7 @@ import { ExternalVehicleDatabase } from './external-vehicle.db.js';
 describe('Database Runtime Identity Verification', () => {
   afterAll(async () => {
     await ExternalVehicleDatabase.disconnect();
+    await prisma.$disconnect();
   });
 
   it('Verifies primary Trip Sheet Prisma Client connects to "trip" database', async () => {
