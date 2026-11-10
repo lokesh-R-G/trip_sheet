@@ -92,6 +92,40 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
   const [startingLocation, setStartingLocation] = useState('Chennai Madhavaram Logistics Hub');
   const [finalDestination, setFinalDestination] = useState('Bengaluru Peenya Industrial Yard');
 
+  // Attendance checking for trip assignment
+  const [driverAttendance, setDriverAttendance] = useState<any | null>(null);
+  const [attendanceChecking, setAttendanceChecking] = useState(false);
+
+  useEffect(() => {
+    if (!driverId || !startDate) return;
+    const dateStr = startDate.split('T')[0];
+    let isCancelled = false;
+    setAttendanceChecking(true);
+
+    attendanceApi
+      .list({ driverId, date: dateStr })
+      .then((records) => {
+        if (!isCancelled) {
+          if (Array.isArray(records) && records.length > 0) {
+            setDriverAttendance(records[0]);
+          } else {
+            setDriverAttendance(null);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch driver attendance status for trip start date:', err);
+        if (!isCancelled) setDriverAttendance(null);
+      })
+      .finally(() => {
+        if (!isCancelled) setAttendanceChecking(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [driverId, startDate]);
+
   // Section B: Odometer & Distance (Support Cases 1, 2, 3, 4)
   const [odoMode, setOdoMode] = useState<'both' | 'start_only' | 'unmeasured' | 'test_discrepancy'>('both');
   const [startingOdometer, setStartingOdometer] = useState<number>(125000);
@@ -576,6 +610,65 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                     </option>
                   ))}
                 </select>
+
+                {/* Driver Attendance Status Indicator & Warnings */}
+                <div className="mt-2">
+                  {attendanceChecking ? (
+                    <div className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                      Checking attendance records...
+                    </div>
+                  ) : driverAttendance ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-500 font-medium">Daily Attendance:</span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                            driverAttendance.status === 'present'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : driverAttendance.status === 'absent'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : driverAttendance.status === 'on_leave'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {driverAttendance.status.toUpperCase()}
+                        </span>
+                        {driverAttendance.source && (
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            [{driverAttendance.source}]
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Warnings (non-blocking) */}
+                      {driverAttendance.status === 'absent' && (
+                        <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-800 flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Warning:</strong> Selected driver is marked <strong>ABSENT</strong> on {startDate.split('T')[0]}. You may still dispatch this trip, but attendance should be reviewed.
+                          </span>
+                        </div>
+                      )}
+                      {driverAttendance.status === 'on_leave' && (
+                        <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg text-[11px] text-purple-800 flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Warning:</strong> Selected driver is on <strong>APPROVED LEAVE</strong> on {startDate.split('T')[0]}.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-amber-50/80 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Notice:</strong> No attendance recorded yet for this driver on {startDate.split('T')[0]}.
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -1164,6 +1257,65 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                   <option value="Repairs">Repairs</option>
                   <option value="Other Operational">Other Operational</option>
                 </select>
+
+                {/* Driver Attendance Status Indicator & Warnings */}
+                <div className="mt-2">
+                  {attendanceChecking ? (
+                    <div className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                      Checking attendance records...
+                    </div>
+                  ) : driverAttendance ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-500 font-medium">Daily Attendance:</span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                            driverAttendance.status === 'present'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : driverAttendance.status === 'absent'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : driverAttendance.status === 'on_leave'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {driverAttendance.status.toUpperCase()}
+                        </span>
+                        {driverAttendance.source && (
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            [{driverAttendance.source}]
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Warnings (non-blocking) */}
+                      {driverAttendance.status === 'absent' && (
+                        <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-800 flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Warning:</strong> Selected driver is marked <strong>ABSENT</strong> on {startDate.split('T')[0]}. You may still dispatch this trip, but attendance should be reviewed.
+                          </span>
+                        </div>
+                      )}
+                      {driverAttendance.status === 'on_leave' && (
+                        <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg text-[11px] text-purple-800 flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Warning:</strong> Selected driver is on <strong>APPROVED LEAVE</strong> on {startDate.split('T')[0]}.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-amber-50/80 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Notice:</strong> No attendance recorded yet for this driver on {startDate.split('T')[0]}.
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="col-span-2">
                 <label className="block font-semibold text-gray-700 mb-1">Description</label>

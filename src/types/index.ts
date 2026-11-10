@@ -355,9 +355,48 @@ export interface IntegrationJob {
   timestamp: string;
 }
 
+export type AttendanceStatus = 'present' | 'absent' | 'half_day' | 'on_leave' | 'rest_day';
+export type AttendanceSource = 'MANUAL' | 'TRIP_DERIVED' | 'IMPORT';
+
+export interface DriverAttendance {
+  id: string;
+  driverId: string;
+  driverNumber: string;
+  driverName: string;
+  attendanceDate: string;
+  status: AttendanceStatus;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  source: AttendanceSource;
+  remarks: string | null;
+  markedBy: string;
+  approvedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonthlyDriverAttendanceSummary {
+  driverId: string;
+  driverNumber: string;
+  driverName: string;
+  presentDays: number;
+  absentDays: number;
+  halfDays: number;
+  leaveDays: number;
+  restDays: number;
+  unrecordedDays: number;
+  totalMarkedDays: number;
+}
+
+export interface MonthlyAttendanceSummary {
+  month: string;
+  totalDays: number;
+  driverSummaries: MonthlyDriverAttendanceSummary[];
+}
+
 export interface AuditLog {
   id: string;
-  entityType: 'Trip' | 'Driver' | 'Advance' | 'Expense' | 'FuelDeduction' | 'SalaryStructure' | 'Payroll' | 'Odometer';
+  entityType: 'Trip' | 'Driver' | 'DriverAttendance' | 'Advance' | 'Expense' | 'FuelDeduction' | 'SalaryStructure' | 'Payroll' | 'Odometer';
   entityId: string;
   entityLabel: string;
   action: string;

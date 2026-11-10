@@ -30,13 +30,22 @@ export class TripLifecycleService {
 
   public async createTrip(data: CreateTripDTO, actor = 'system', ipAddress?: string): Promise<TripResponseDTO> {
     // 1. Fetch referenced entities
-    const [driver, vehicle] = await Promise.all([
-      prisma.driver.findUnique({ where: { id: data.driverId } }),
-      prisma.vehicle.findUnique({ where: { id: data.vehicleId } }),
-    ]);
-
     const startDate = new Date(data.startDate);
     const endDate = data.endDate ? new Date(data.endDate) : null;
+    const startCalendarDate = new Date(startDate.toISOString().split('T')[0]);
+
+    const [driver, vehicle, attendance] = await Promise.all([
+      prisma.driver.findUnique({ where: { id: data.driverId } }),
+      prisma.vehicle.findUnique({ where: { id: data.vehicleId } }),
+      prisma.driverAttendance.findUnique({
+        where: {
+          driverId_attendanceDate: {
+            driverId: data.driverId,
+            attendanceDate: startCalendarDate,
+          },
+        },
+      }),
+    ]);
 
     // 2. Domain validation
     const validation = this.validationEngine.validateForCreation({
@@ -47,6 +56,7 @@ export class TripLifecycleService {
       startingLocation: data.startingLocation,
       finalDestination: data.finalDestination,
       isDraft: data.isDraft,
+      attendance,
     });
 
     if (!validation.canProceed) {
@@ -188,7 +198,11 @@ export class TripLifecycleService {
     }
 
     const fullTrip = await this.repo.findById(trip.id);
-    return this.mapToResponse(fullTrip!);
+    const response = this.mapToResponse(fullTrip!);
+    if (validation.warnings && validation.warnings.length > 0) {
+      response.warnings = validation.warnings;
+    }
+    return response;
   }
 
   public async transitionTrip(

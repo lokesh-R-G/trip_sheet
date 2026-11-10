@@ -137,6 +137,7 @@ export interface TripResponseDTO {
   version: number;
   odometer?: TripOdometerResponseDTO | null;
   routeSegments?: RouteSegmentResponseDTO[];
+  warnings?: string[];
   createdAt: string;
   updatedAt: string;
 }

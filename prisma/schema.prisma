@@ -36,6 +36,7 @@ model Driver {
   advances           DriverAdvanceTransaction[]
   trips              Trip[]
   payrollRecords     PayrollRecord[]
+  attendances        DriverAttendance[]
 
   @@index([status])
   @@index([currentVehicleId])
@@ -93,6 +94,30 @@ model DriverSalaryAssignment {
   @@index([driverId, effectiveFrom])
   @@index([salaryStructureId])
   @@map("driver_salary_assignments")
+}
+
+model DriverAttendance {
+  id             String    @id @default(uuid()) @db.Uuid
+  driverId       String    @map("driver_id") @db.Uuid
+  attendanceDate DateTime  @map("attendance_date") @db.Date
+  status         String    @db.VarChar(30) // present, absent, half_day, on_leave, rest_day
+  checkInTime    DateTime? @map("check_in_time") @db.Timestamptz(6)
+  checkOutTime   DateTime? @map("check_out_time") @db.Timestamptz(6)
+  source         String    @default("MANUAL") @db.VarChar(30) // MANUAL, TRIP_DERIVED, IMPORT
+  remarks        String?   @db.Text
+  markedBy       String    @map("marked_by") @db.VarChar(100)
+  approvedBy     String?   @map("approved_by") @db.VarChar(100)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  @@unique([driverId, attendanceDate])
+  @@index([attendanceDate])
+  @@index([status])
+  @@index([driverId, attendanceDate])
+  @@map("driver_attendances")
 }
 
 // ========================================================

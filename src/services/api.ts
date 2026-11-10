@@ -59,8 +59,91 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 // ==========================================
-// 1. DRIVER API
+// 10. DRIVER ATTENDANCE API
 // ==========================================
+export const attendanceApi = {
+  list: async (params?: {
+    driverId?: string;
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+    source?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.driverId) q.append('driverId', params.driverId);
+    if (params?.date) q.append('date', params.date);
+    if (params?.startDate) q.append('startDate', params.startDate);
+    if (params?.endDate) q.append('endDate', params.endDate);
+    if (params?.status) q.append('status', params.status);
+    if (params?.source) q.append('source', params.source);
+    if (params?.page) q.append('page', String(params.page));
+    if (params?.limit) q.append('limit', String(params.limit || 50));
+    return request<any[]>(`/attendances?${q.toString()}`);
+  },
+  getById: async (id: string) => {
+    return request<any>(`/attendances/${id}`);
+  },
+  mark: async (data: {
+    driverId: string;
+    attendanceDate: string;
+    status: string;
+    checkInTime?: string | null;
+    checkOutTime?: string | null;
+    source?: string;
+    remarks?: string | null;
+    approvedBy?: string | null;
+  }) => {
+    return request<any>('/attendances', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  bulkMark: async (data: {
+    attendanceDate: string;
+    records: Array<{
+      driverId: string;
+      status: string;
+      checkInTime?: string | null;
+      checkOutTime?: string | null;
+      source?: string;
+      remarks?: string | null;
+      approvedBy?: string | null;
+    }>;
+  }) => {
+    return request<{ recorded: any[]; skipped: any[] }>('/attendances/bulk', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  update: async (
+    id: string,
+    updates: {
+      status?: string;
+      checkInTime?: string | null;
+      checkOutTime?: string | null;
+      remarks?: string | null;
+      approvedBy?: string | null;
+      reason: string;
+    }
+  ) => {
+    return request<any>(`/attendances/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+  getMonthlySummary: async (month: string, driverId?: string) => {
+    const q = new URLSearchParams({ month });
+    if (driverId) q.append('driverId', driverId);
+    return request<any>(`/attendances/summary/monthly?${q.toString()}`);
+  },
+  getAuditHistory: async (id: string) => {
+    return request<any[]>(`/attendances/${id}/audit`);
+  },
+};
+
 export const driverApi = {
   list: async (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
     const q = new URLSearchParams();

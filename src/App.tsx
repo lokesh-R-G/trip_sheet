@@ -4,6 +4,7 @@ import { Sidebar, PageId } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { DashboardView } from './features/dashboard/DashboardView';
 import { DriverListView } from './features/drivers/DriverListView';
+import { AttendanceMainView } from './features/attendance/AttendanceMainView';
 import { SalaryStructureView } from './features/salary-structures/SalaryStructureView';
 import { AdvanceListView } from './features/advances/AdvanceListView';
 import { VehicleReferenceView } from './features/vehicles/VehicleReferenceView';
@@ -31,6 +32,8 @@ function FleetAppContent() {
         return <DashboardView onNavigate={setCurrentPage} />;
       case 'drivers':
         return <DriverListView />;
+      case 'driver-attendance':
+        return <AttendanceMainView />;
       case 'salary-structures':
         return <SalaryStructureView />;
       case 'advances':

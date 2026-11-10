@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   Users,
+  CalendarCheck2,
   BadgeDollarSign,
   HandCoins,
   Truck,
@@ -28,6 +29,7 @@ import { useFleetStore } from '../../services/store';
 export type PageId =
   | 'dashboard'
   | 'drivers'
+  | 'driver-attendance'
   | 'salary-structures'
   | 'advances'
   | 'vehicles'
@@ -87,6 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       group: 'Operations',
       items: [
         { id: 'drivers' as PageId, label: 'Drivers', icon: Users },
+        { id: 'driver-attendance' as PageId, label: 'Driver Attendance', icon: CalendarCheck2 },
         { id: 'salary-structures' as PageId, label: 'Salary Structures', icon: BadgeDollarSign },
         { id: 'advances' as PageId, label: 'Driver Advances', icon: HandCoins },
         { id: 'vehicles' as PageId, label: 'Vehicles (TLCM Master)', icon: Truck },

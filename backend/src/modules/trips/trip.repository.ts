@@ -22,12 +22,23 @@ export class TripRepository {
   public async generateNextTripNumber(tx?: PrismaTransactionClient): Promise<string> {
     const client = tx || prisma;
     const year = new Date().getFullYear();
-    const count = await client.trip.count({
+    // Use latest trip to determine max sequence to avoid race conditions and conflicts
+    const latest = await client.trip.findFirst({
       where: {
         tripNumber: { startsWith: `TRIP-${year}-` },
       },
+      orderBy: { tripNumber: 'desc' },
+      select: { tripNumber: true },
     });
-    const seq = (count + 1).toString().padStart(4, '0');
+
+    let nextNum = 1;
+    if (latest?.tripNumber) {
+      const match = latest.tripNumber.match(/TRIP-\d{4}-(\d+)/);
+      if (match) {
+        nextNum = parseInt(match[1], 10) + 1;
+      }
+    }
+    const seq = nextNum.toString().padStart(4, '0');
     return `TRIP-${year}-${seq}`;
   }
 

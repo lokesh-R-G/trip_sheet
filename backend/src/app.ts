@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { driverRouter } from './modules/drivers/driver.routes.js';
+import { attendanceRouter } from './modules/drivers/attendance/attendance.routes.js';
 import { tripRouter } from './modules/trips/trip.routes.js';
 import { auditRouter } from './modules/audit/audit.routes.js';
 import { fuelTopUpRouter } from './modules/fuel/topups/fuel-topup.routes.js';
@@ -52,6 +53,7 @@ app.get('/api/v1/health', async (_req: Request, res: Response) => {
 
 // Mount domain routes
 app.use('/api/v1/drivers', driverRouter);
+app.use('/api/v1/attendances', attendanceRouter);
 app.use('/api/v1/vehicles', vehicleRouter);
 app.use('/api/v1/trips', tripRouter);
 app.use('/api/v1/audit-logs', auditRouter);

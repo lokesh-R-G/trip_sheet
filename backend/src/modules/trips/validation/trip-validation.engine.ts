@@ -1,4 +1,4 @@
-import { Driver, Vehicle, Trip, TripOdometerRecord, TripRouteSegment } from '@prisma/client';
+import { Driver, Vehicle, Trip, TripOdometerRecord, TripRouteSegment, DriverAttendance } from '@prisma/client';
 import { OdometerDiscrepancy } from '../../odometer/types.js';
 
 export interface TripValidationResult {
@@ -22,6 +22,7 @@ export class TripValidationEngine {
     startingLocation: string;
     finalDestination: string;
     isDraft: boolean;
+    attendance?: DriverAttendance | null;
   }): TripValidationResult {
     const blockingErrors: string[] = [];
     const warnings: string[] = [];
@@ -43,6 +44,17 @@ export class TripValidationEngine {
           warnings.push(`Driver license expired on ${params.driver.licenseExpiry.toISOString().split('T')[0]}. Must be renewed before trip dispatch.`);
         } else {
           blockingErrors.push(`Driver license expired on ${params.driver.licenseExpiry.toISOString().split('T')[0]}. Cannot dispatch trip.`);
+        }
+      }
+
+      // Attendance checks (Section 5: Warnings initially, not automatic blocking rules)
+      if (params.attendance === null || params.attendance === undefined) {
+        warnings.push(`Driver ${params.driver.fullName} has no attendance record for trip start date (${params.startDate.toISOString().split('T')[0]}).`);
+      } else {
+        if (params.attendance.status === 'absent') {
+          warnings.push(`Driver ${params.driver.fullName} is marked ABSENT on trip start date (${params.startDate.toISOString().split('T')[0]}).`);
+        } else if (params.attendance.status === 'on_leave') {
+          warnings.push(`Driver ${params.driver.fullName} has APPROVED LEAVE on trip start date (${params.startDate.toISOString().split('T')[0]}).`);
         }
       }
     }
