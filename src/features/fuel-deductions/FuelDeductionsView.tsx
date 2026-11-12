@@ -207,7 +207,7 @@ export const FuelDeductionsView: React.FC = () => {
             </>
           ) : (
             <span className="text-[10px] text-gray-400 capitalize">
-              {t.fuelDeduction.reviewStatus.replace(/_/g, ' ')}
+              {(t.fuelDeduction.reviewStatus || 'pending_review').replace(/_/g, ' ')}
             </span>
           )}
         </div>

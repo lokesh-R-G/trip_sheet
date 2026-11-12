@@ -241,6 +241,7 @@ export const FleetStoreProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         acceptedDistance: Number(odo.acceptedDistance || 0),
         validationStatus: odo.validationStatus || 'unverified',
         tyreAttributionEligible: Boolean(odo.tyreAttributionEligible),
+        tyreAttributionStatus: odo.tyreAttributionStatus || (odo.tyreAttributionEligible ? 'eligible' : 'on_hold'),
         tyreAttributionHoldReason: odo.tyreAttributionHoldReason || undefined,
       },
       fuel: {

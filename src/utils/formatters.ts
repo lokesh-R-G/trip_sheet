@@ -57,8 +57,11 @@ export function formatDateTime(dateTimeString?: string): string {
   }
 }
 
-export function getStatusBadgeClasses(status: string): string {
-  switch (status.toLowerCase()) {
+export function getStatusBadgeClasses(status?: string | null): string {
+  if (!status) {
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  }
+  switch (status.toString().trim().toLowerCase()) {
     case 'active':
     case 'verified':
     case 'completed':

@@ -49,18 +49,20 @@ export const DriverDetailModal: React.FC<DriverDetailModalProps> = ({
   // Collect all expenses submitted by this driver
   const driverExpenses = driverTrips.flatMap(t => t.expenses);
 
-  // Collect fuel deductions for this driver
-  const driverDeductions = driverTrips.map(t => ({
-    tripNumber: t.tripNumber,
-    date: t.startDate,
-    distance: t.distance.acceptedDistance,
-    actualMileage: t.fuel.tripMileageKmPerLitre,
-    benchmark: t.fuelDeduction.benchmarkMileage,
-    excessFuel: t.fuelDeduction.excessFuelLitres,
-    potentialDeduction: t.fuelDeduction.potentialDeductionAmount,
-    approvedDeduction: t.fuelDeduction.approvedDeductionAmount,
-    status: t.fuelDeduction.reviewStatus
-  }));
+  // Collect fuel deductions for this driver (trips with evaluated deductions)
+  const driverDeductions = driverTrips
+    .filter(t => (t.fuelDeduction.potentialDeductionAmount > 0 || t.fuelDeduction.approvedDeductionAmount > 0))
+    .map(t => ({
+      tripNumber: t.tripNumber,
+      date: t.startDate,
+      distance: t.distance.acceptedDistance,
+      actualMileage: t.fuel.tripMileageKmPerLitre,
+      benchmark: t.fuelDeduction.benchmarkMileage,
+      excessFuel: t.fuelDeduction.excessFuelLitres,
+      potentialDeduction: t.fuelDeduction.potentialDeductionAmount,
+      approvedDeduction: t.fuelDeduction.approvedDeductionAmount,
+      status: t.fuelDeduction.reviewStatus || 'pending_review'
+    }));
 
   // Collect payroll records for this driver
   const driverPayrolls = payrollRuns.flatMap(run =>
@@ -353,7 +355,7 @@ export const DriverDetailModal: React.FC<DriverDetailModalProps> = ({
                       <div className="font-bold text-rose-700">
                         {formatCurrency(ded.approvedDeduction || ded.potentialDeduction)}
                       </div>
-                      <div className="text-[10px] text-gray-400 capitalize">{ded.status.replace(/_/g, ' ')}</div>
+                      <div className="text-[10px] text-gray-400 capitalize">{(ded.status || '').replace(/_/g, ' ')}</div>
                     </div>
                   </div>
                 ))}

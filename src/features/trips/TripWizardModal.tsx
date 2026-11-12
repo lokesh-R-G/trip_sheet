@@ -26,7 +26,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 
-import { tripApi, expenseApi, vehicleApi } from '../../services/api';
+import { tripApi, expenseApi, vehicleApi, attendanceApi } from '../../services/api';
 
 interface TripWizardModalProps {
   isOpen: boolean;
@@ -87,10 +87,10 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
 
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 16));
   const [endDate, setEndDate] = useState('');
-  const [purpose, setPurpose] = useState('Heavy Machinery Consignment Transit');
+  const [purpose, setPurpose] = useState('');
   const [notes, setNotes] = useState('');
-  const [startingLocation, setStartingLocation] = useState('Chennai Madhavaram Logistics Hub');
-  const [finalDestination, setFinalDestination] = useState('Bengaluru Peenya Industrial Yard');
+  const [startingLocation, setStartingLocation] = useState('');
+  const [finalDestination, setFinalDestination] = useState('');
 
   // Attendance checking for trip assignment
   const [driverAttendance, setDriverAttendance] = useState<any | null>(null);
@@ -128,101 +128,21 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
 
   // Section B: Odometer & Distance (Support Cases 1, 2, 3, 4)
   const [odoMode, setOdoMode] = useState<'both' | 'start_only' | 'unmeasured' | 'test_discrepancy'>('both');
-  const [startingOdometer, setStartingOdometer] = useState<number>(125000);
-  const [endingOdometer, setEndingOdometer] = useState<number | undefined>(125450);
-  const [reportedDistance, setReportedDistance] = useState<number>(450);
+  const [startingOdometer, setStartingOdometer] = useState<number | undefined>(undefined);
+  const [endingOdometer, setEndingOdometer] = useState<number | undefined>(undefined);
+  const [reportedDistance, setReportedDistance] = useState<number | undefined>(undefined);
 
   // Section C: Route segments
-  const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([
-    {
-      id: 'seg-1',
-      sequence: 1,
-      fromLocation: 'Chennai',
-      toLocation: 'Vellore',
-      departureTime: '08:30',
-      arrivalTime: '11:45',
-      distanceKm: 135,
-      tonnage: 28,
-      cargoDescription: 'OEM Auto Components (Full Load)',
-      notes: 'NH-48 Corridor'
-    },
-    {
-      id: 'seg-2',
-      sequence: 2,
-      fromLocation: 'Vellore',
-      toLocation: 'Bengaluru',
-      departureTime: '12:30',
-      arrivalTime: '16:30',
-      distanceKm: 215,
-      tonnage: 28,
-      cargoDescription: 'OEM Auto Components (Unloading)',
-      notes: 'Industrial Delivery'
-    },
-    {
-      id: 'seg-3',
-      sequence: 3,
-      fromLocation: 'Bengaluru',
-      toLocation: 'Hosur',
-      departureTime: '17:30',
-      arrivalTime: '19:00',
-      distanceKm: 40,
-      tonnage: 0,
-      cargoDescription: 'Empty Repositioning',
-      notes: 'Return consignment loading'
-    },
-    {
-      id: 'seg-4',
-      sequence: 4,
-      fromLocation: 'Hosur',
-      toLocation: 'Chennai',
-      departureTime: '20:00',
-      arrivalTime: '02:00',
-      distanceKm: 60,
-      tonnage: 18,
-      cargoDescription: 'Return Spares Backhaul',
-      notes: 'Final leg to Madhavaram yard'
-    }
-  ]);
+  const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
 
   // Section D: Fuel Consumption
-  const [openingFuel, setOpeningFuel] = useState<number>(120);
-  const [fuelAdded, setFuelAdded] = useState<number>(100);
-  const [closingFuel, setClosingFuel] = useState<number>(130);
-  const [manualFuelLitres, setManualFuelLitres] = useState<number>(90);
+  const [openingFuel, setOpeningFuel] = useState<number | undefined>(undefined);
+  const [fuelAdded, setFuelAdded] = useState<number | undefined>(undefined);
+  const [closingFuel, setClosingFuel] = useState<number | undefined>(undefined);
+  const [manualFuelLitres, setManualFuelLitres] = useState<number | undefined>(undefined);
 
   // Section E: Trip Expenses
-  const [expenses, setExpenses] = useState<TripExpense[]>([
-    {
-      id: 'exp-w-1',
-      tripId: '',
-      tripNumber: 'DRAFT',
-      category: 'Tolls',
-      description: 'FASTag Toll NH-48 Sriperumbudur',
-      amount: 850,
-      expenseDate: new Date().toISOString().split('T')[0],
-      paymentMethod: 'FASTag',
-      receiptReference: 'FAST-99120',
-      submittedBy: 'Driver',
-      approvalStatus: 'approved',
-      approvedAmount: 850,
-      reviewer: 'Fleet Auditor'
-    },
-    {
-      id: 'exp-w-2',
-      tripId: '',
-      tripNumber: 'DRAFT',
-      category: 'Loading & Unloading',
-      description: 'Bommasandra Warehouse Hamali Labor',
-      amount: 500,
-      expenseDate: new Date().toISOString().split('T')[0],
-      paymentMethod: 'Cash',
-      receiptReference: 'UNLOAD-VCH-22',
-      submittedBy: 'Driver',
-      approvalStatus: 'approved',
-      approvedAmount: 500,
-      reviewer: 'Operations Manager'
-    }
-  ]);
+  const [expenses, setExpenses] = useState<TripExpense[]>([]);
 
   // Section F: Advance Settlement
   const [selectedAdvanceId, setSelectedAdvanceId] = useState<string>('');
@@ -232,26 +152,22 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
   useEffect(() => {
     if (!vehicleId) return;
     const selVeh = vehicles.find(v => v.id === vehicleId);
-    const fallbackOdo = selVeh?.latestOdometer || 100000;
+    const initialOdo = selVeh?.latestOdometer !== undefined ? selVeh.latestOdometer : undefined;
     
-    // First set local fallback
-    setStartingOdometer(fallbackOdo);
-    if (odoMode === 'both') {
-      setEndingOdometer(fallbackOdo + (reportedDistance || 450));
+    // Set from selected vehicle master if available
+    if (initialOdo !== undefined) {
+      setStartingOdometer(initialOdo);
     }
 
     // Query authoritative external vehicle database for latest confirmed baseline
     vehicleApi.getLatestOdometer(vehicleId)
       .then((res) => {
-        if (res && res.latestAuthoritativeOdometer > 0) {
+        if (res && res.latestAuthoritativeOdometer !== undefined && res.latestAuthoritativeOdometer !== null) {
           setStartingOdometer(res.latestAuthoritativeOdometer);
-          if (odoMode === 'both') {
-            setEndingOdometer(res.latestAuthoritativeOdometer + (reportedDistance || 450));
-          }
         }
       })
       .catch((err) => {
-        console.warn('Could not fetch external authoritative odometer, using local cached baseline:', err);
+        console.warn('Could not fetch external authoritative odometer, using cached vehicle baseline:', err);
       });
   }, [vehicleId]);
 
@@ -259,24 +175,20 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
   const handleOdoModeChange = (mode: 'both' | 'start_only' | 'unmeasured' | 'test_discrepancy') => {
     setOdoMode(mode);
     const selVeh = vehicles.find(v => v.id === vehicleId);
-    const baseOdo = selVeh?.latestOdometer || 125000;
+    const baseOdo = selVeh?.latestOdometer ?? (startingOdometer ?? 0);
 
     if (mode === 'both') {
       setStartingOdometer(baseOdo);
-      setEndingOdometer(baseOdo + 450);
-      setReportedDistance(450);
+      setEndingOdometer(reportedDistance ? baseOdo + reportedDistance : undefined);
     } else if (mode === 'start_only') {
       setStartingOdometer(baseOdo);
       setEndingOdometer(undefined);
-      setReportedDistance(450);
     } else if (mode === 'unmeasured') {
-      setStartingOdometer(0);
+      setStartingOdometer(undefined);
       setEndingOdometer(undefined);
-      setReportedDistance(450);
     } else if (mode === 'test_discrepancy') {
       setStartingOdometer(baseOdo);
-      setEndingOdometer(baseOdo - 100); // Sequence backwards!
-      setReportedDistance(450);
+      setEndingOdometer(baseOdo > 100 ? baseOdo - 100 : 0); // Sequence backwards test!
     }
   };
 
@@ -298,19 +210,28 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
 
   const matchedBenchmark =
     benchmarks.find(b => b.vehicleId === vehicleId && b.status === 'active') ||
-    benchmarks.find(b => b.vehicleType === vehicles.find(v => v.id === vehicleId)?.vehicleType && b.status === 'active') ||
-    benchmarks[0];
+    benchmarks.find(b => b.vehicleType === vehicles.find(v => v.id === vehicleId)?.vehicleType && b.status === 'active');
 
-  const fuelDeductionCalc = calculateFuelDeduction(
-    odoEval.acceptedDistance,
-    fuelEval.acceptedFuelLitres,
-    matchedBenchmark ? matchedBenchmark.expectedMileageKmPerLitre : 5.0,
-    matchedBenchmark ? matchedBenchmark.permittedTolerancePercent : 5.0,
-    settings.defaultFuelPricePerLitre
-  );
+  const hasBenchmark = Boolean(matchedBenchmark && matchedBenchmark.expectedMileageKmPerLitre > 0);
+
+  const fuelDeductionCalc = hasBenchmark
+    ? calculateFuelDeduction(
+        odoEval.acceptedDistance,
+        fuelEval.acceptedFuelLitres,
+        matchedBenchmark!.expectedMileageKmPerLitre,
+        matchedBenchmark!.permittedTolerancePercent ?? 0,
+        settings.defaultFuelPricePerLitre
+      )
+    : {
+        expectedFuelLitres: 0,
+        allowedFuelLitres: 0,
+        excessFuelLitres: 0,
+        potentialDeductionAmount: 0,
+        varianceStatus: 'within_tolerance' as const,
+      };
 
   const linkedAdvance = advances.find(a => a.id === selectedAdvanceId);
-  const totalAdvances = linkedAdvance ? linkedAdvance.advanceAmount : 10000;
+  const totalAdvances = linkedAdvance ? linkedAdvance.advanceAmount : 0;
   const approvedExpTotal = expenses
     .filter(e => e.approvalStatus === 'approved')
     .reduce((s, e) => s + (e.approvedAmount || e.amount), 0);
@@ -328,11 +249,11 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
     const newSeg: RouteSegment = {
       id: `seg-${Date.now()}`,
       sequence: nextSeq,
-      fromLocation: routeSegments[routeSegments.length - 1]?.toLocation || 'Intermediate City',
-      toLocation: 'Next Waypoint',
-      distanceKm: 50,
-      tonnage: selVeh?.tonnage || 28,
-      cargoDescription: 'Commercial Consignment',
+      fromLocation: routeSegments[routeSegments.length - 1]?.toLocation || '',
+      toLocation: '',
+      distanceKm: 0,
+      tonnage: selVeh?.tonnage !== undefined ? selVeh.tonnage : 0,
+      cargoDescription: '',
       notes: ''
     };
     setRouteSegments([...routeSegments, newSeg]);
@@ -343,32 +264,34 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
   };
 
   // Expense add handler
-  const [newExpCategory, setNewExpCategory] = useState<ExpenseCategory>('Parking');
+  const [newExpCategory, setNewExpCategory] = useState<ExpenseCategory>('Tolls');
   const [newExpDesc, setNewExpDesc] = useState('');
-  const [newExpAmount, setNewExpAmount] = useState<number>(250);
+  const [newExpAmount, setNewExpAmount] = useState<number | ''>('');
 
   const handleAddExpense = () => {
-    if (newExpAmount <= 0) return;
+    if (!newExpAmount || Number(newExpAmount) <= 0) return;
     const newExp: TripExpense = {
       id: `exp-${Date.now()}`,
       tripId: '',
       tripNumber: 'DRAFT',
       category: newExpCategory,
-      description: newExpDesc || `${newExpCategory} charge`,
+      description: newExpDesc || `${newExpCategory} expense`,
       amount: Number(newExpAmount),
       expenseDate: new Date().toISOString().split('T')[0],
       paymentMethod: 'Cash',
-      receiptReference: `REC-${Math.floor(100 + Math.random() * 900)}`,
+      receiptReference: '',
       submittedBy: drivers.find(d => d.id === driverId)?.fullName || 'Driver',
       approvalStatus: 'approved',
       approvedAmount: Number(newExpAmount),
-      reviewer: 'Current User'
+      reviewer: 'Operations Officer'
     };
     setExpenses([...expenses, newExp]);
     setNewExpDesc('');
+    setNewExpAmount('');
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdTripRecord, setCreatedTripRecord] = useState<any | null>(null);
 
   const handleFinish = async (asDraft: boolean = false) => {
     if (isSubmitting) return;
@@ -376,25 +299,45 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
       setIsSubmitting(true);
       setErrorMessage(null);
 
+      // Validate required fields
+      if (!driverId) {
+        throw new Error('Please select a driver pilot.');
+      }
+      if (!vehicleId) {
+        throw new Error('Please select an authoritative vehicle.');
+      }
+      if (!startDate) {
+        throw new Error('Please specify a departure timestamp.');
+      }
+      if (!startingLocation.trim()) {
+        throw new Error('Starting location is required.');
+      }
+      if (!finalDestination.trim()) {
+        throw new Error('Final destination is required.');
+      }
+      if (!purpose.trim()) {
+        throw new Error('Trip purpose is required.');
+      }
+
       // 1. Prepare create payload conforming to backend createTripSchema
       const payload: any = {
         driverId,
         vehicleId,
         startDate: new Date(startDate).toISOString(),
         endDate: endDate ? new Date(endDate).toISOString() : null,
-        startingLocation,
-        finalDestination,
-        purpose: purpose.trim() || 'General Cargo Transit',
+        startingLocation: startingLocation.trim(),
+        finalDestination: finalDestination.trim(),
+        purpose: purpose.trim(),
         isDraft: asDraft,
         notes: notes.trim() || null,
         odometer: {
-          startingReading: odoMode === 'unmeasured' ? null : startingOdometer,
+          startingReading: odoMode === 'unmeasured' ? null : (startingOdometer !== undefined ? Number(startingOdometer) : null),
           startingTimestamp: new Date(startDate).toISOString(),
           startingSource: 'measured',
-          endingReading: odoMode === 'start_only' || odoMode === 'unmeasured' ? null : (endingOdometer ?? null),
+          endingReading: odoMode === 'start_only' || odoMode === 'unmeasured' ? null : (endingOdometer !== undefined ? Number(endingOdometer) : null),
           endingTimestamp: endDate ? new Date(endDate).toISOString() : null,
           endingSource: 'measured',
-          reportedDistance: reportedDistance ?? null,
+          reportedDistance: reportedDistance !== undefined ? Number(reportedDistance) : null,
         },
         routeSegments: routeSegments.map((seg, idx) => ({
           sequence: seg.sequence || (idx + 1),
@@ -409,17 +352,34 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
         })),
       };
 
-      // 2. Call backend API
-      const createdTripRes = await tripApi.create(payload);
+      // 2. Call backend API (or reuse created trip if retrying failed completion step)
+      let currentTrip = createdTripRecord;
+      if (!currentTrip) {
+        currentTrip = await tripApi.create(payload);
+        setCreatedTripRecord(currentTrip);
+      }
 
-      // 3. If user selected Complete & Submit (not draft), transition to completed
-      let finalTripRes = createdTripRes;
+      // 3. If user selected Complete & Submit (not draft), transition appropriately:
+      // Note: Backend lifecycle is draft -> in_progress -> completed.
+      // If created with isDraft=false, currentStatus is already 'in_progress'.
+      // If created with isDraft=true, transition first to in_progress then to completed.
+      let finalTripRes = currentTrip;
       if (!asDraft) {
-        try {
-          finalTripRes = await tripApi.transition(createdTripRes.id, 'completed', createdTripRes.version, 'Trip completed via operational wizard');
-        } catch (transErr: any) {
-          console.warn('Completed transition warning:', transErr);
-          // If transition requires intermediate in_progress, proceed gracefully
+        if (finalTripRes.status === 'draft') {
+          finalTripRes = await tripApi.transition(
+            finalTripRes.id,
+            'in_progress',
+            finalTripRes.version,
+            'Trip dispatched via operational wizard'
+          );
+        }
+        if (finalTripRes.status === 'in_progress') {
+          finalTripRes = await tripApi.transition(
+            finalTripRes.id,
+            'completed',
+            finalTripRes.version,
+            'Trip completed via operational wizard'
+          );
         }
       }
 
@@ -428,7 +388,7 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
         for (const exp of expenses) {
           try {
             await expenseApi.submit({
-              tripId: createdTripRes.id,
+              tripId: finalTripRes.id,
               driverId,
               category: exp.category.toLowerCase(),
               description: exp.description,
@@ -437,7 +397,7 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
               paymentMethod: exp.paymentMethod.toLowerCase(),
               receiptReference: exp.receiptReference || null,
             });
-          } catch (expErr) {
+          } catch (expErr: any) {
             console.warn('Expense creation note:', expErr);
           }
         }
@@ -499,9 +459,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
         startingLocation: finalTripRes.startingLocation,
         finalDestination: finalTripRes.finalDestination,
         fuel: {
-          openingFuelQuantity: openingFuel,
-          fuelAddedDuringTrip: fuelAdded,
-          closingFuelQuantity: closingFuel,
+          openingFuelQuantity: openingFuel ?? 0,
+          fuelAddedDuringTrip: fuelAdded ?? 0,
+          closingFuelQuantity: closingFuel ?? 0,
           calculatedConsumption: fuelEval.calculatedConsumption,
           manuallyReportedLitres: manualFuelLitres,
           acceptedFuelLitres: fuelEval.acceptedFuelLitres,
@@ -512,32 +472,32 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
         },
         expenses: expenses,
         settlement: {
-          advanceIds: [],
-          totalAdvancesIssued: 0,
-          totalApprovedExpenses: 0,
-          amountReturnedByDriver: 0,
+          advanceIds: selectedAdvanceId ? [selectedAdvanceId] : [],
+          totalAdvancesIssued: totalAdvances,
+          totalApprovedExpenses: approvedExpTotal,
+          amountReturnedByDriver: amountReturned,
           otherValidCredits: 0,
-          outstandingBalance: 0,
+          outstandingBalance: outstandingSettlement,
           status: 'pending',
           authorizedPayrollRecoveryAmount: 0,
         },
         fuelDeduction: {
           benchmarkId: matchedBenchmark?.id,
           benchmarkName: matchedBenchmark?.name,
-          benchmarkMileage: matchedBenchmark?.expectedMileageKmPerLitre || 5,
-          tolerancePercent: matchedBenchmark?.permittedTolerancePercent || 5,
+          benchmarkMileage: matchedBenchmark?.expectedMileageKmPerLitre || 0,
+          tolerancePercent: matchedBenchmark?.permittedTolerancePercent || 0,
           expectedFuelLitres: fuelDeductionCalc.expectedFuelLitres,
           allowedFuelLitres: fuelDeductionCalc.allowedFuelLitres,
           excessFuelLitres: fuelDeductionCalc.excessFuelLitres,
           applicableFuelPrice: settings.defaultFuelPricePerLitre,
           potentialDeductionAmount: fuelDeductionCalc.potentialDeductionAmount,
           approvedDeductionAmount: 0,
-          calculationStatus: 'calculated',
+          calculationStatus: hasBenchmark ? 'calculated' : 'unconfigured',
           reviewStatus: 'pending_review',
         },
         tlcmIntegration: {
-          syncStatus: 'synced',
-          odometerSubmitted: true,
+          syncStatus: 'pending',
+          odometerSubmitted: Boolean(finalTripRes.odometer?.endingReading),
           tyreDistanceAttributed: Boolean(finalTripRes.odometer?.tyreAttributionEligible),
         },
         createdAt: finalTripRes.createdAt,
@@ -828,9 +788,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                 <input
                   type="number"
                   disabled={odoMode === 'unmeasured'}
-                  value={odoMode === 'unmeasured' ? '' : startingOdometer}
-                  onChange={e => setStartingOdometer(Number(e.target.value))}
-                  placeholder="e.g. 125000"
+                  value={odoMode === 'unmeasured' ? '' : (startingOdometer ?? '')}
+                  onChange={e => setStartingOdometer(e.target.value !== '' ? Number(e.target.value) : undefined)}
+                  placeholder="Enter starting odo..."
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 font-mono font-bold disabled:bg-gray-100 disabled:text-gray-400"
                 />
               </div>
@@ -840,9 +800,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                 <input
                   type="number"
                   disabled={odoMode === 'start_only' || odoMode === 'unmeasured'}
-                  value={odoMode === 'start_only' || odoMode === 'unmeasured' ? '' : endingOdometer || ''}
-                  onChange={e => setEndingOdometer(e.target.value ? Number(e.target.value) : undefined)}
-                  placeholder="e.g. 125450"
+                  value={odoMode === 'start_only' || odoMode === 'unmeasured' ? '' : (endingOdometer ?? '')}
+                  onChange={e => setEndingOdometer(e.target.value !== '' ? Number(e.target.value) : undefined)}
+                  placeholder="Enter ending odo..."
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 font-mono font-bold disabled:bg-gray-100 disabled:text-gray-400"
                 />
               </div>
@@ -851,9 +811,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                 <label className="block font-semibold text-gray-700 mb-1">Reported Distance (km)</label>
                 <input
                   type="number"
-                  value={reportedDistance}
-                  onChange={e => setReportedDistance(Number(e.target.value))}
-                  placeholder="e.g. 450"
+                  value={reportedDistance ?? ''}
+                  onChange={e => setReportedDistance(e.target.value !== '' ? Number(e.target.value) : undefined)}
+                  placeholder="Enter reported km..."
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 font-mono font-bold"
                 />
               </div>
@@ -1169,8 +1129,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                 <label className="block font-semibold text-gray-700 mb-1">Opening Fuel Tank (Litres)</label>
                 <input
                   type="number"
-                  value={openingFuel}
-                  onChange={e => setOpeningFuel(Number(e.target.value))}
+                  value={openingFuel ?? ''}
+                  onChange={e => setOpeningFuel(e.target.value !== '' ? Number(e.target.value) : undefined)}
+                  placeholder="Enter opening fuel..."
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 font-mono font-bold"
                 />
               </div>
@@ -1178,8 +1139,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                 <label className="block font-semibold text-gray-700 mb-1">Fuel Added En Route (Litres)</label>
                 <input
                   type="number"
-                  value={fuelAdded}
-                  onChange={e => setFuelAdded(Number(e.target.value))}
+                  value={fuelAdded ?? ''}
+                  onChange={e => setFuelAdded(e.target.value !== '' ? Number(e.target.value) : undefined)}
+                  placeholder="0 if none"
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 font-mono font-bold"
                 />
               </div>
@@ -1187,8 +1149,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                 <label className="block font-semibold text-gray-700 mb-1">Closing Fuel Tank (Litres)</label>
                 <input
                   type="number"
-                  value={closingFuel}
-                  onChange={e => setClosingFuel(Number(e.target.value))}
+                  value={closingFuel ?? ''}
+                  onChange={e => setClosingFuel(e.target.value !== '' ? Number(e.target.value) : undefined)}
+                  placeholder="Enter closing fuel..."
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-emerald-600 font-mono font-bold"
                 />
               </div>
@@ -1198,7 +1161,7 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
             <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 grid grid-cols-3 gap-3">
               <div>
                 <span className="text-gray-500 block text-[10px] uppercase font-semibold">
-                  Balance Formula ({openingFuel} + {fuelAdded} − {closingFuel})
+                  Balance Formula ({openingFuel ?? 0} + {fuelAdded ?? 0} − {closingFuel ?? 0})
                 </span>
                 <span className="text-base font-bold text-emerald-800 font-mono">
                   {formatLitres(fuelEval.calculatedConsumption || 0)}
@@ -1211,8 +1174,9 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                 </label>
                 <input
                   type="number"
-                  value={manualFuelLitres}
-                  onChange={e => setManualFuelLitres(Number(e.target.value))}
+                  value={manualFuelLitres ?? ''}
+                  onChange={e => setManualFuelLitres(e.target.value !== '' ? Number(e.target.value) : undefined)}
+                  placeholder="Slip litres"
                   className="w-28 px-2 py-1 rounded border border-gray-300 font-mono font-bold bg-white"
                 />
               </div>
@@ -1257,65 +1221,6 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
                   <option value="Repairs">Repairs</option>
                   <option value="Other Operational">Other Operational</option>
                 </select>
-
-                {/* Driver Attendance Status Indicator & Warnings */}
-                <div className="mt-2">
-                  {attendanceChecking ? (
-                    <div className="text-[11px] text-gray-400 flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-                      Checking attendance records...
-                    </div>
-                  ) : driverAttendance ? (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-gray-500 font-medium">Daily Attendance:</span>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                            driverAttendance.status === 'present'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : driverAttendance.status === 'absent'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : driverAttendance.status === 'on_leave'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          {driverAttendance.status.toUpperCase()}
-                        </span>
-                        {driverAttendance.source && (
-                          <span className="text-[10px] text-gray-400 font-mono">
-                            [{driverAttendance.source}]
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Warnings (non-blocking) */}
-                      {driverAttendance.status === 'absent' && (
-                        <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-800 flex items-start gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                          <span>
-                            <strong>Warning:</strong> Selected driver is marked <strong>ABSENT</strong> on {startDate.split('T')[0]}. You may still dispatch this trip, but attendance should be reviewed.
-                          </span>
-                        </div>
-                      )}
-                      {driverAttendance.status === 'on_leave' && (
-                        <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg text-[11px] text-purple-800 flex items-start gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
-                          <span>
-                            <strong>Warning:</strong> Selected driver is on <strong>APPROVED LEAVE</strong> on {startDate.split('T')[0]}.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-2 bg-amber-50/80 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-start gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Notice:</strong> No attendance recorded yet for this driver on {startDate.split('T')[0]}.
-                      </span>
-                    </div>
-                  )}
-                </div>
               </div>
               <div className="col-span-2">
                 <label className="block font-semibold text-gray-700 mb-1">Description</label>
@@ -1426,50 +1331,65 @@ export const TripWizardModal: React.FC<TripWizardModalProps> = ({
         {currentStep === 6 && (
           <div className="space-y-4 text-xs">
             <h4 className="font-bold text-gray-900 text-sm">Section G: Mileage Benchmark & Fuel Deduction</h4>
-            <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <span className="text-gray-500 block">Applicable Mileage Benchmark:</span>
-                  <span className="font-bold text-emerald-800">{matchedBenchmark?.name}</span>
+            {!hasBenchmark ? (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-700" />
+                  <span>No Mileage Benchmark Configured</span>
                 </div>
-                <div>
-                  <span className="text-gray-500 block">Benchmark Rate & Tolerance:</span>
-                  <span className="font-bold text-gray-900 font-mono">
-                    {matchedBenchmark?.expectedMileageKmPerLitre} km/L (+{matchedBenchmark?.permittedTolerancePercent}% tol)
+                <p className="text-xs text-amber-800">
+                  No active mileage benchmark exists for this vehicle or vehicle type ({vehicles.find(v => v.id === vehicleId)?.vehicleType || 'Unassigned'}).
+                </p>
+                <p className="text-[11px] text-amber-700">
+                  Under strict company policy, no default benchmark is assumed and no arbitrary fuel penalty is generated. Please configure a verified benchmark in Benchmarks settings.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-gray-500 block">Applicable Mileage Benchmark:</span>
+                    <span className="font-bold text-emerald-800">{matchedBenchmark?.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Benchmark Rate & Tolerance:</span>
+                    <span className="font-bold text-gray-900 font-mono">
+                      {matchedBenchmark?.expectedMileageKmPerLitre} km/L (+{matchedBenchmark?.permittedTolerancePercent}% tol)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-200 grid grid-cols-4 gap-2 text-center text-xs">
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-200">
+                    <span className="text-gray-400 block text-[10px] uppercase">Expected Fuel</span>
+                    <span className="font-bold text-gray-800">{formatLitres(fuelDeductionCalc.expectedFuelLitres)}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-200">
+                    <span className="text-gray-400 block text-[10px] uppercase">Allowed Fuel (+{matchedBenchmark?.permittedTolerancePercent || 0}%)</span>
+                    <span className="font-bold text-gray-800">{formatLitres(fuelDeductionCalc.allowedFuelLitres)}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-200">
+                    <span className="text-gray-400 block text-[10px] uppercase">Actual Used</span>
+                    <span className="font-bold text-gray-800">{formatLitres(fuelEval.acceptedFuelLitres)}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-200">
+                    <span className="text-gray-400 block text-[10px] uppercase">Excess Fuel</span>
+                    <span className={`font-bold ${fuelDeductionCalc.excessFuelLitres > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      {formatLitres(fuelDeductionCalc.excessFuelLitres)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-200 flex items-center justify-between text-xs">
+                  <span className="text-gray-600 font-medium">
+                    Potential Fuel Deduction @ ₹{settings.defaultFuelPricePerLitre}/L:
+                  </span>
+                  <span className="text-base font-bold text-rose-700 font-mono">
+                    {formatCurrency(fuelDeductionCalc.potentialDeductionAmount)}
                   </span>
                 </div>
               </div>
-
-              <div className="pt-3 border-t border-gray-200 grid grid-cols-4 gap-2 text-center text-xs">
-                <div className="bg-white p-2.5 rounded-lg border border-gray-200">
-                  <span className="text-gray-400 block text-[10px] uppercase">Expected Fuel</span>
-                  <span className="font-bold text-gray-800">{formatLitres(fuelDeductionCalc.expectedFuelLitres)}</span>
-                </div>
-                <div className="bg-white p-2.5 rounded-lg border border-gray-200">
-                  <span className="text-gray-400 block text-[10px] uppercase">Allowed Fuel (+5%)</span>
-                  <span className="font-bold text-gray-800">{formatLitres(fuelDeductionCalc.allowedFuelLitres)}</span>
-                </div>
-                <div className="bg-white p-2.5 rounded-lg border border-gray-200">
-                  <span className="text-gray-400 block text-[10px] uppercase">Actual Used</span>
-                  <span className="font-bold text-gray-800">{formatLitres(fuelEval.acceptedFuelLitres)}</span>
-                </div>
-                <div className="bg-white p-2.5 rounded-lg border border-gray-200">
-                  <span className="text-gray-400 block text-[10px] uppercase">Excess Fuel</span>
-                  <span className={`font-bold ${fuelDeductionCalc.excessFuelLitres > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                    {formatLitres(fuelDeductionCalc.excessFuelLitres)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-gray-200 flex items-center justify-between text-xs">
-                <span className="text-gray-600 font-medium">
-                  Potential Fuel Deduction @ ₹{settings.defaultFuelPricePerLitre}/L:
-                </span>
-                <span className="text-base font-bold text-rose-700 font-mono">
-                  {formatCurrency(fuelDeductionCalc.potentialDeductionAmount)}
-                </span>
-              </div>
-            </div>
+            )}
 
             <p className="text-[11px] text-gray-500">
               Rule 15: Potential fuel deduction requires audit approval before posting to monthly payroll.

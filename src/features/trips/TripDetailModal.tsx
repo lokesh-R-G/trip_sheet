@@ -304,14 +304,14 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
               <span className={trip.settlement.outstandingBalance > 0 ? 'text-rose-700' : 'text-emerald-700'}>
                 {formatCurrency(trip.settlement.outstandingBalance)}
               </span>
-              <span className="text-[10px] text-gray-400 font-normal ml-1">({trip.settlement.status.replace(/_/g, ' ')})</span>
+              <span className="text-[10px] text-gray-400 font-normal ml-1">({(trip.settlement.status || 'pending').replace(/_/g, ' ')})</span>
             </div>
           </div>
           <div>
             <span className="text-[10px] font-semibold text-gray-500 uppercase">Fuel Deduction</span>
             <div className="mt-1 font-bold text-sm text-gray-900">
               {formatCurrency(trip.fuelDeduction.approvedDeductionAmount || trip.fuelDeduction.potentialDeductionAmount)}
-              <span className="text-[10px] text-gray-400 font-normal ml-1">({trip.fuelDeduction.reviewStatus.replace(/_/g, ' ')})</span>
+              <span className="text-[10px] text-gray-400 font-normal ml-1">({(trip.fuelDeduction.reviewStatus || 'pending_review').replace(/_/g, ' ')})</span>
             </div>
           </div>
         </div>
@@ -580,7 +580,7 @@ export const TripDetailModal: React.FC<TripDetailModalProps> = ({
                   {formatLitres(trip.fuel.acceptedFuelLitres)}
                 </span>
                 <span className="text-[10px] text-gray-400 block mt-0.5">
-                  Method: {trip.fuel.measurementMethod.replace(/_/g, ' ')}
+                  Method: {(trip.fuel.measurementMethod || '').replace(/_/g, ' ')}
                 </span>
               </div>
               <div className="text-right">
